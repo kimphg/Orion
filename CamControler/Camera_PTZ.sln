@@ -1,0 +1,47 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2013
+VisualStudioVersion = 12.0.21005.1
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Camera_PTZ", "Camera_PTZ\Camera_PTZ.csproj", "{15355AB7-FD97-4F91-A53A-CB12CC6A8D58}"
+	ProjectSection(ProjectDependencies) = postProject
+		{83BC9702-4192-4654-B359-14CBD71D656E} = {83BC9702-4192-4654-B359-14CBD71D656E}
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UsbHid", "UsbHid\UsbHid.csproj", "{83BC9702-4192-4654-B359-14CBD71D656E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|Mixed Platforms = Debug|Mixed Platforms
+		Debug|Win32 = Debug|Win32
+		Release|Any CPU = Release|Any CPU
+		Release|Mixed Platforms = Release|Mixed Platforms
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{15355AB7-FD97-4F91-A53A-CB12CC6A8D58}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{15355AB7-FD97-4F91-A53A-CB12CC6A8D58}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{15355AB7-FD97-4F91-A53A-CB12CC6A8D58}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
+		{15355AB7-FD97-4F91-A53A-CB12CC6A8D58}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
+		{15355AB7-FD97-4F91-A53A-CB12CC6A8D58}.Debug|Win32.ActiveCfg = Debug|Any CPU
+		{15355AB7-FD97-4F91-A53A-CB12CC6A8D58}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{15355AB7-FD97-4F91-A53A-CB12CC6A8D58}.Release|Any CPU.Build.0 = Release|Any CPU
+		{15355AB7-FD97-4F91-A53A-CB12CC6A8D58}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{15355AB7-FD97-4F91-A53A-CB12CC6A8D58}.Release|Mixed Platforms.Build.0 = Release|Any CPU
+		{15355AB7-FD97-4F91-A53A-CB12CC6A8D58}.Release|Win32.ActiveCfg = Release|Any CPU
+		{83BC9702-4192-4654-B359-14CBD71D656E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{83BC9702-4192-4654-B359-14CBD71D656E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{83BC9702-4192-4654-B359-14CBD71D656E}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
+		{83BC9702-4192-4654-B359-14CBD71D656E}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
+		{83BC9702-4192-4654-B359-14CBD71D656E}.Debug|Win32.ActiveCfg = Debug|Any CPU
+		{83BC9702-4192-4654-B359-14CBD71D656E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{83BC9702-4192-4654-B359-14CBD71D656E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{83BC9702-4192-4654-B359-14CBD71D656E}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{83BC9702-4192-4654-B359-14CBD71D656E}.Release|Mixed Platforms.Build.0 = Release|Any CPU
+		{83BC9702-4192-4654-B359-14CBD71D656E}.Release|Win32.ActiveCfg = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
