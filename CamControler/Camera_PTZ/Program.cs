@@ -18,7 +18,7 @@ namespace Camera_PTZ
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new PtzControl());
+            Application.Run(new GuiMain());
         }
     }
 }

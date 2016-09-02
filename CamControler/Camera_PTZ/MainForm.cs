@@ -29,7 +29,7 @@ struct arpaOBJ
 namespace Camera_PTZ
 {
     enum cameraType { pelco, nighthawk, flir } ;
-    public partial class PtzControl : Form
+    public partial class GuiMain : Form
     {
         bool connectionActive;
         Thread workerThread;
@@ -49,7 +49,7 @@ namespace Camera_PTZ
         //private static PTZFacade _ptz;
         private const uint PRESET_PATTERN = 8;
         TelnetConnection tc;
-        public PtzControl()
+        public GuiMain()
         {
             InitializeComponent();
             //UDPsock = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
@@ -99,7 +99,7 @@ namespace Camera_PTZ
                         //_ptz = new PTZFacade(IPtextBox.Text.ToString(), textBox2.Text.ToString(), textBox3.Text.ToString());
                         //_ptz.Move(x, y, z);
                         tc = new TelnetConnection(IPtextBox.Text.ToString(), 23);
-                        comandNH = new CommandTransferNH(tc);
+                        comandNH = new CommandTransferNH(tc,this);
                         if (textBox2.Text.Length > 0) tc.Login(textBox2.Text.ToString(), textBox3.Text.ToString(), 100);
                         button1.Enabled = true;
                         button2.Enabled = true;
@@ -129,9 +129,9 @@ namespace Camera_PTZ
                     try
                     {
                         PTZFacade ptz;
-                        //ptz = new PTZFacade(IPtextBox.Text,"admin","admin");
-                       // comandPC = new CommandTransferPelco(ptz,this);
-                        comandPC = new CommandTransferPelco( this);
+                        ptz = new PTZFacade(IPtextBox.Text, "admin", "admin");
+                        comandPC = new CommandTransferPelco(ptz, this);
+                        //comandPC = new CommandTransferPelco( this);
                         workerThread = new Thread(comandPC.ListenToCommand);
                         workerThread.Start();
                         button1.Enabled = true;
@@ -457,7 +457,7 @@ namespace Camera_PTZ
             constants = new double[nparam];
             try
             {
-                StreamReader sr = new StreamReader("c:\\Camera\\camConfig.txt");
+                StreamReader sr = new StreamReader("camConfig.txt");
                 for (int i = 0; i < nparam; i++)
                 {
                     String[] line = sr.ReadLine().Split(' ');
@@ -482,21 +482,236 @@ namespace Camera_PTZ
     }
     public class CommandTransferNH
     {
+        UdpClient listener;
+        IPEndPoint groupEP;
+        // cac bien trang thai cua joystick
+        public UsbHidDevice pDevice;
+        bool bt1, bt2, bt3,
+             bt4, bt5, bt6,
+             bt7, bt8, bt9,
+             bt10, bt11, bt12;
+        int mArrow;
+        bool dialoghidden = false;
         public volatile bool tinhChinh = true;
-        double azi, y;
-        public byte camSelect = 0;
-        double range;
+        double bearing;// goc phuong vi
+        double elevation;// goc ta`
+        double range;// cu ly mt
+        public bool isColorCam = false;//bien chon camera anh nhiet hay anh mau
+        private bool onTracking = false;// trang thai ba'm
         public volatile Config config;
         private volatile bool _shouldStop = false;
         TelnetConnection tc;
-        public CommandTransferNH(TelnetConnection tconnect)
+        GuiMain m_Gui;
+        public CommandTransferNH(TelnetConnection tconnect, GuiMain ptzControl)
         {
+            //ket noi den joystick
+            pDevice = new UsbHidDevice(0x046D, 0xC215);
+            //pDevice.OnConnected += DeviceOnConnected;
+            //pDevice.OnDisConnected += DeviceOnDisConnected;
+            pDevice.DataReceived += DeviceDataReceived;
+            pDevice.Connect();
+            // ket noi den camera
             tc = tconnect;
             config = new Config();
+            //mo socket
+            listener = new UdpClient(8001);
+            groupEP = new IPEndPoint(IPAddress.Any, 0);
             initCommand();
-            //azi = 0; y = 0; zoom = 0;
         }
+        private void ThreadSafe(MethodInvoker method)
+        {
+            if (m_Gui.InvokeRequired)
+                m_Gui.Invoke(method);
+            else
+                method();
+        }
+        private void DeviceDataReceived(byte[] data)
+        {
+            int newcy = (data[2] >> 2) | ((data[3] & 0x0f) << 6);
+            newcy = (newcy - 512) / 16;
+            int newcx = (data[1] | ((data[2] & 0x03) << 8));
+            newcx = (newcx - 512) / 16;
+            int newvelo = 255 - data[6];
+            int new_mArrow = data[3] >> 4;
+            int buttons = (data[5] | (data[7]) << 8);
+            bool newbt1 = ((buttons & 0x01) > 0);
+            bool newbt2 = ((buttons & 0x02) > 0);
+            bool newbt3 = ((buttons & 0x04) > 0);
+            bool newbt4 = ((buttons & 0x08) > 0);
+            bool newbt5 = ((buttons & 0x10) > 0);
+            bool newbt6 = ((buttons & 0x20) > 0);
+            bool newbt7 = ((buttons & 0x40) > 0);
+            bool newbt8 = ((buttons & 0x80) > 0);
+            bool newbt9 = ((buttons & 0x0100) > 0);
+            bool newbt10 = ((buttons & 0x0200) > 0);
+            bool newbt11 = ((buttons & 0x0400) > 0);
+            bool newbt12 = ((buttons & 0x0800) > 0);
+            //xy motion
+            if (bt1 != newbt1)
+            {
+                bt1 = newbt1;
+                if (bt1)
+                {
+                    if (!dialoghidden)
+                    {
+                        ThreadSafe(() => m_Gui.GotoSelectedTarget());
+                    }
+                    else if (!onTracking)
+                    {
+                        byte[] dgram;// bat dau track
+                        dgram = new byte[2];
+                        dgram[0] = 0xff;
+                        dgram[1] = 0x01;
+                        listener.Send(dgram, 2, "127.0.0.1", 8000);
+                        onTracking = true;
+                    }
+                    else
+                    {
+                        byte[] dgram;// ngung track
+                        dgram = new byte[2];
+                        dgram[0] = 0xff;
+                        dgram[1] = 0x00;
+                        listener.Send(dgram, 2, "127.0.0.1", 8000);
+                        Stop();
+                        onTracking = false;
+                    }
+                }
 
+
+            }
+
+            if (bt4 != newbt4)
+            {
+                bt4 = newbt4;
+
+                if (bt4)// phong to cua so track
+                {
+                    byte[] dgram;
+                    dgram = new byte[2];
+                    dgram[0] = 0xff;
+                    dgram[1] = 0x02;
+                    listener.Send(dgram, 2, "127.0.0.1", 8000);
+                }
+
+            }
+            if (bt6 != newbt6)
+            {
+                bt6 = newbt6;
+
+                if (bt6)// thu nho cua so track
+                {
+                    byte[] dgram;
+                    dgram = new byte[2];
+                    dgram[0] = 0xff;
+                    dgram[1] = 0x03;
+                    listener.Send(dgram, 2, "127.0.0.1", 8000);
+                }
+            }
+            if (bt12 != newbt12)
+            {
+                bt12 = newbt12;
+
+                if (bt12)
+                {
+                    if (dialoghidden)
+                    {
+
+                        ThreadSafe(() => m_Gui.ShowOpTop());
+
+                        dialoghidden = false;
+                    }
+                    else
+                    {
+                        ThreadSafe(() => m_Gui.HideToTray());
+                        dialoghidden = true;
+                    }
+                }
+
+            }
+
+            //fine move
+            if (mArrow != new_mArrow)
+            {
+                mArrow = new_mArrow;
+                double vazi, vtilt;
+                switch (mArrow)
+                {
+                    case 2://right
+                        vazi = 0.7 + newvelo / 127.0;
+                        vtilt = 0;
+                        break;
+                    case 4://down
+                        if (!dialoghidden)
+                        {
+                            ThreadSafe(() => m_Gui.targetUp());
+                            return;
+                        }
+                        vazi = 0;
+                        vtilt = -(0.5 + newvelo / 127.0);
+                        break;
+                    case 6://left
+
+                        vazi = -(0.7 + newvelo / 127.0);
+                        vtilt = 0;
+                        break;
+                    case 0://up
+                        if (!dialoghidden)
+                        {
+                            ThreadSafe(() => m_Gui.targetDown());
+                            return;
+                        }
+                        vazi = 0;
+                        vtilt = 0.5 + newvelo / 127.0;
+                        break;
+                    default:
+                        vazi = 0;
+                        vtilt = 0;
+                        break;
+                }
+                //vazi = vazi;
+                //vtilt = vtilt;
+                if (isconnected) pelco_ptz.MoveXYZ(vazi, vtilt, 0);
+            }
+            if ((newcx != cx || newcy != cy) && (mArrow == 8))
+            {
+                ThreadSafe(() => m_Gui.ViewtData(cx, cy, onTracking, isconnected));
+                double vazi, vtilt;
+                cx = newcx;
+                cy = newcy;
+                if (Math.Abs(cx) <= 1) vazi = 0; else vazi = cx / 10.0;
+                if (Math.Abs(cy) <= 1) vtilt = 0; else vtilt = -cy / 20.0;
+                if (isconnected && (!onTracking)) pelco_ptz.MoveXYZ(vazi, vtilt, 0);
+            }
+            //bt
+            if (bt3 != newbt3)
+            {
+                bt3 = newbt3;
+                PTZFacade.ZoomDirection zoomdir;
+                if (bt3)
+                    zoomdir = PTZFacade.ZoomDirection.In;
+                else
+                    zoomdir = PTZFacade.ZoomDirection.Stop;
+                if (isconnected) pelco_ptz.Zoom(zoomdir);
+            }
+            if (bt5 != newbt5)
+            {
+                bt5 = newbt5;
+                PTZFacade.ZoomDirection zoomdir;
+                if (bt5)
+                    zoomdir = PTZFacade.ZoomDirection.Out;
+                else
+                    zoomdir = PTZFacade.ZoomDirection.Stop;
+                if (isconnected) pelco_ptz.Zoom(zoomdir);
+            }
+
+            //double.TryParse(coor[1], out azi);//degrees
+            //azi = azi / 3.141592654 * 180;
+            //double.TryParse(coor[2], out y);//m
+            //double.TryParse(coor[3], out range);//km
+            //if(y>0)config.constants[0] = y;
+            //ialpha = (unsigned short)(0xffff*alpha/(2*3.141592654));
+
+        }
         private void initCommand()
         {
 
@@ -532,8 +747,7 @@ namespace Camera_PTZ
             _shouldStop = false;
             try
             {
-                UdpClient listener = new UdpClient(1991);
-                IPEndPoint groupEP = new IPEndPoint(IPAddress.Any, 1991);
+                
                 while (!_shouldStop)
                 {
                     byte[] receive_byte_array = listener.Receive(ref groupEP);
@@ -542,9 +756,9 @@ namespace Camera_PTZ
                     string[] coor = received_data.Split(' ');
                     if ((coor[0] == "PTZSET") && (coor.Length >= 4))
                     {
-                        double.TryParse(coor[1], out azi);//degrees
+                        double.TryParse(coor[1], out bearing);//degrees
                         //azi = azi / 3.141592654 * 180;
-                        double.TryParse(coor[2], out y);//m
+                        double.TryParse(coor[2], out elevation);//m
                         double.TryParse(coor[3], out range);//km
                         //if(y>0)config.constants[0] = y;
                         //ialpha = (unsigned short)(0xffff*alpha/(2*3.141592654));
@@ -554,7 +768,7 @@ namespace Camera_PTZ
                     else if ((coor[0] == "AZISET") && (coor.Length >= 2))
                     {
                         byte[] cmd = new byte[8];
-                        double.TryParse(coor[1], out azi);//degrees
+                        double.TryParse(coor[1], out bearing);//degrees
                         //set azi ----------------------- 
                         //MessageBox.Show("new azi tracking");
                         ushort newazi = getAzi();
@@ -676,7 +890,7 @@ namespace Camera_PTZ
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
         }
-        public void StoF()
+        public void StopFocus()
         {
             byte[] cmd = new byte[8];
 
@@ -734,7 +948,10 @@ namespace Camera_PTZ
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
         }
+        public void pan(float rate)
+        { 
 
+        }
         public void panLeft()
         {
             byte[] cmd = new byte[8];
@@ -923,7 +1140,7 @@ namespace Camera_PTZ
         private ushort getAzi()
         {
 
-            return (ushort)(0xffff * ((azi) / (360)));
+            return (ushort)(0xffff * ((bearing) / (360)));
         }
         public void Update()
         {
@@ -1024,8 +1241,8 @@ namespace Camera_PTZ
         private ushort getEL()
         {
 
-            double EL = -Math.Atan(y / 1000 / range);
-            double ELcalib = Math.Cos(Math.Abs(azi - config.constants[1] / 57.2957795)) * config.constants[2] / 57.2957795;
+            double EL = -Math.Atan(elevation / 1000 / range);
+            double ELcalib = Math.Cos(Math.Abs(bearing - config.constants[1] / 57.2957795)) * config.constants[2] / 57.2957795;
             EL += ELcalib;// in radian
             EL += config.constants[0] / 57.2957795;
             if (EL < 0) EL += 6.283185307;
@@ -1041,7 +1258,7 @@ namespace Camera_PTZ
 
         internal void SetValue(double p1, double p3)
         {
-            azi = p1;
+            bearing = p1;
             range = p3;
             if (range == 0) return;
             Update();
@@ -1049,7 +1266,7 @@ namespace Camera_PTZ
 
         internal void CamsSelect(int p)
         {
-            camSelect = (byte)p;
+            isColorCam = (byte)p;
         }
 
         internal void TurnOffCam()
@@ -1067,7 +1284,7 @@ namespace Camera_PTZ
             tc.Write(cmd);
         }
     }
-
+   
     public class CommandTransferPelco
     {
         public volatile bool tinhChinh = true;
@@ -1079,14 +1296,14 @@ namespace Camera_PTZ
         private volatile bool _shouldStop = false;
         PTZFacade pelco_ptz;
         //private PTZFacade ptz;
-        private PtzControl ptzControl;
+        private GuiMain ptzControl;
         public UsbHidDevice Device;
         bool onTracking;
         bool isconnected = false;
         bool dialoghidden = false;
         UdpClient listener ;
         IPEndPoint groupEP ;
-        public CommandTransferPelco(PTZFacade ptz, PtzControl ptzControl)
+        public CommandTransferPelco(PTZFacade ptz, GuiMain ptzControl)
         {
 
             // TODO: Complete member initialization
@@ -1095,8 +1312,8 @@ namespace Camera_PTZ
             config = new Config();
             initCommand();
            
-                listener = new UdpClient(8001);
-                groupEP = new IPEndPoint(IPAddress.Any, 0);
+            listener = new UdpClient(8001);
+            groupEP = new IPEndPoint(IPAddress.Any, 0);
             
             this.ptzControl = ptzControl;
             Device = new UsbHidDevice(0x046D, 0xC215);
@@ -1106,7 +1323,7 @@ namespace Camera_PTZ
             Device.Connect();
             onTracking = false;
         }
-        public CommandTransferPelco(  PtzControl ptzControl)
+        public CommandTransferPelco(  GuiMain ptzControl)
         {
 
             // TODO: Complete member initialization
