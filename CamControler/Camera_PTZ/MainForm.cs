@@ -31,7 +31,7 @@ namespace Camera_PTZ
     enum cameraType { pelco, nighthawk, flir } ;
     public partial class GuiMain : Form
     {
-        bool connectionActive;
+        public volatile bool connectionActive;
         Thread workerThread;
         //Socket UDPsock;
         cameraType camtype;
@@ -99,6 +99,7 @@ namespace Camera_PTZ
                         //_ptz = new PTZFacade(IPtextBox.Text.ToString(), textBox2.Text.ToString(), textBox3.Text.ToString());
                         //_ptz.Move(x, y, z);
                         tc = new TelnetConnection(IPtextBox.Text.ToString(), 23);
+                        
                         comandNH = new CommandTransferNH(tc,this);
                         if (textBox2.Text.Length > 0) tc.Login(textBox2.Text.ToString(), textBox3.Text.ToString(), 100);
                         button1.Enabled = true;
@@ -487,10 +488,10 @@ namespace Camera_PTZ
         IPEndPoint groupEP;
         // các biến trạng thái cua joystick
         public UsbHidDevice pDevice;
-        bool bt1, bt2, bt3,
-             bt4, bt5, bt6,
-             bt7, bt8, bt9,
-             bt10, bt11, bt12;
+        bool bt1 = false, bt2 = false, bt3 = false,
+             bt4 = false, bt5 = false, bt6 = false,
+             bt7 = false, bt8 = false, bt9 = false,
+             bt10 = false, bt11 = false, bt12 = false;
         int joystick_x, joystick_y;
         int mArrow;
         // các biến trạng thái chung
@@ -503,7 +504,7 @@ namespace Camera_PTZ
         double bearing;// goc phuong vi
         double elevation;// goc ta`
         double range;// cu ly mt
-        
+        System.Threading.Timer mUpdateTimer;
         public volatile Config config;
         
         TelnetConnection tc;
@@ -520,10 +521,17 @@ namespace Camera_PTZ
             // ket noi den camera
             tc = tconnect;
             config = new Config();
+            m_Gui = ptzControl;
             //mo socket
+            mUpdateTimer = new System.Threading.Timer(TimerCallback, null, 30, 30);
             listener = new UdpClient(8001);
             groupEP = new IPEndPoint(IPAddress.Any, 0);
             initCommand();
+        }
+        private void TimerCallback(object state)
+        {
+
+            if(m_Gui.connectionActive)Update();
         }
         private void ThreadSafe(MethodInvoker method)
         {
@@ -590,7 +598,6 @@ namespace Camera_PTZ
             if (bt4 != newbt4)
             {
                 bt4 = newbt4;
-
                 if (bt4)// phóng to cửa sổ bám
                 {
                     byte[] dgram;
@@ -599,7 +606,6 @@ namespace Camera_PTZ
                     dgram[1] = 0x02;
                     listener.Send(dgram, 2, "127.0.0.1", 8000);
                 }
-
             }
             if (bt6 != newbt6)
             {
@@ -617,7 +623,6 @@ namespace Camera_PTZ
             if (bt12 != newbt12)
             {
                 bt12 = newbt12;
-
                 if (bt12)// ẩn/hiện giao diện hiển thị
                 {
                     if (dialoghidden)
@@ -639,7 +644,6 @@ namespace Camera_PTZ
             if (mArrow != new_mArrow)
             {
                 mArrow = new_mArrow;
-                double vazi, vtilt;
                 switch (mArrow)
                 {
                     case 2://right
@@ -660,7 +664,8 @@ namespace Camera_PTZ
                 }
                 
             }
-            if (bt2&& (mArrow == 8))
+            bt2 = newbt2;
+            if (bt2 && (mArrow==8))
             {
                 
                 ThreadSafe(() => m_Gui.ViewtData(joystick_x, joystick_y, onTracking, true));
@@ -759,8 +764,6 @@ namespace Camera_PTZ
             _shouldStop = false;
             try
             {
-                
-                
                 while (!_shouldStop)
                 {
                     byte[] receive_byte_array = listener.Receive(ref groupEP);
@@ -799,8 +802,20 @@ namespace Camera_PTZ
                         if (y_track < -1) y_track = -1;
                         if (x_track < -1) x_track = -1;
                     }
+                    string[] strList = received_data.Split(',');
+                    
+                    for (int i = 0; i < strList.Length - 4;i++ )
+                    {
+                        if ((strList[i] == "$RATTM"))//radar
+                        {
+
+                            ThreadSafe(() => m_Gui.addARPA(strList.c));
+                        }
+                    }
+                    
                     //lenh dieu khien bang udp--------------------------------------------
                     string[] coor = received_data.Split(' ');
+                    
                     if ((coor[0] == "PTZSET") && (coor.Length >= 4))
                     {
                         double.TryParse(coor[1], out bearing);//degrees
@@ -1284,7 +1299,13 @@ namespace Camera_PTZ
                 pan(x_track);
                 tilt(y_track);
             }
-            else
+            else if(bt2)
+            {
+                double vPan = Convert.ToDouble(joystick_x / 32.0);// giá trị vPan từ -1 đến 1
+                double vTilt = Convert.ToDouble(joystick_y / 32.0);// giá trị vTilt từ -1 đến 1
+                pan(vPan/5);
+                tilt(vTilt/5);
+            }else if(bt7)
             {
                 if (range == 0) return;
                 byte[] cmd = new byte[8];
