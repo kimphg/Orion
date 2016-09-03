@@ -461,7 +461,7 @@ namespace Camera_PTZ
                 for (int i = 0; i < nparam; i++)
                 {
                     String[] line = sr.ReadLine().Split(' ');
-                    constants[i] = double.Parse(line[0]);
+                    constants[i] = double.Parse(line[i]);
                 }
                 
             }
@@ -482,26 +482,31 @@ namespace Camera_PTZ
     }
     public class CommandTransferNH
     {
+        //socket
         UdpClient listener;
         IPEndPoint groupEP;
-        // cac bien trang thai cua joystick
+        // các biến trạng thái cua joystick
         public UsbHidDevice pDevice;
         bool bt1, bt2, bt3,
              bt4, bt5, bt6,
              bt7, bt8, bt9,
              bt10, bt11, bt12;
+        int cx, cy;
         int mArrow;
+        // các biến trạng thái chung
         bool dialoghidden = false;
         public volatile bool tinhChinh = true;
+        // trạng thái mục tiêu radar
         double bearing;// goc phuong vi
         double elevation;// goc ta`
         double range;// cu ly mt
-        public bool isColorCam = false;//bien chon camera anh nhiet hay anh mau
+        public bool isColorCam = false;//biến chọn camera anh nhiet hay anh mau
         private bool onTracking = false;// trang thai ba'm
         public volatile Config config;
         private volatile bool _shouldStop = false;
         TelnetConnection tc;
         GuiMain m_Gui;
+        double x_track = 0, y_track = 0;
         public CommandTransferNH(TelnetConnection tconnect, GuiMain ptzControl)
         {
             //ket noi den joystick
@@ -637,40 +642,22 @@ namespace Camera_PTZ
                 switch (mArrow)
                 {
                     case 2://right
-                        vazi = 0.7 + newvelo / 127.0;
-                        vtilt = 0;
+                        panRight();
                         break;
                     case 4://down
-                        if (!dialoghidden)
-                        {
-                            ThreadSafe(() => m_Gui.targetUp());
-                            return;
-                        }
-                        vazi = 0;
-                        vtilt = -(0.5 + newvelo / 127.0);
+                        tiltDown();
                         break;
                     case 6://left
-
-                        vazi = -(0.7 + newvelo / 127.0);
-                        vtilt = 0;
+                        panLeft();
                         break;
                     case 0://up
-                        if (!dialoghidden)
-                        {
-                            ThreadSafe(() => m_Gui.targetDown());
-                            return;
-                        }
-                        vazi = 0;
-                        vtilt = 0.5 + newvelo / 127.0;
+                        tiltUp();
                         break;
                     default:
-                        vazi = 0;
-                        vtilt = 0;
+                        Stop();
                         break;
                 }
-                //vazi = vazi;
-                //vtilt = vtilt;
-                if (isconnected) pelco_ptz.MoveXYZ(vazi, vtilt, 0);
+                
             }
             if ((newcx != cx || newcy != cy) && (mArrow == 8))
             {
@@ -748,11 +735,46 @@ namespace Camera_PTZ
             try
             {
                 
+                
                 while (!_shouldStop)
                 {
                     byte[] receive_byte_array = listener.Receive(ref groupEP);
                     string received_data = Encoding.ASCII.GetString(receive_byte_array, 0, receive_byte_array.Length);
-                    //MessageBox.Show(received_data);
+                    if (receive_byte_array[0] == 0xff)//nhan du lieu bam tu anh Thi
+                    {
+
+                        int temp;
+                        //lay gia tri x_track
+                        if (receive_byte_array[1] >> 7 > 0)
+                        {
+
+                            temp = (receive_byte_array[1] << 8) | (receive_byte_array[2]) - 1 - 0xffff;
+
+
+                        }
+                        else
+                        {
+                            temp = (receive_byte_array[1] << 8) | (receive_byte_array[2]);
+                        }
+                        x_track += temp / 1500.0;// thay doi tuy theo truong hop
+                        //lay gia tri y_track
+                        if (receive_byte_array[3] >> 7 > 0)
+                        {
+
+                            temp = (receive_byte_array[3] << 8) | (receive_byte_array[4]) - 1 - 0xffff;
+
+                        }
+                        else
+                        {
+                            temp = (receive_byte_array[3] << 8) | (receive_byte_array[4]);
+                        }
+                        y_track += temp / 2000.0;//// thay doi tuy theo truong hop
+                        if (y_track > 1) y_track = 1;
+                        if (x_track > 1) x_track = 1;
+                        if (y_track < -1) y_track = -1;
+                        if (x_track < -1) x_track = -1;
+                    }
+                    //lenh dieu khien bang udp--------------------------------------------
                     string[] coor = received_data.Split(' ');
                     if ((coor[0] == "PTZSET") && (coor.Length >= 4))
                     {
@@ -948,9 +970,38 @@ namespace Camera_PTZ
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
         }
-        public void pan(float rate)
-        { 
-
+        public void pan(double rate)
+        {
+            if (Math.Abs(rate) > 1) return;
+            if (rate >= 0)
+            {
+                byte[] cmd = new byte[8];
+                //set rate
+                int irate = Convert.ToInt32(rate * 127);
+                cmd[0] = 0xFF;
+                cmd[1] = 0x00;
+                cmd[2] = 0x00;
+                cmd[3] = 0x02;
+                cmd[4] = (byte)(irate);
+                cmd[5] = 0x00;
+                cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+                tc.Write(cmd);
+            }
+            else
+            {
+                rate = -rate;
+                byte[] cmd = new byte[8];
+                //set rate
+                int irate = Convert.ToInt32(rate * 127);
+                cmd[0] = 0xFF;
+                cmd[1] = 0x00;
+                cmd[2] = 0x00;
+                cmd[3] = 0x04;
+                cmd[4] = (byte)(irate);
+                cmd[5] = 0x00;
+                cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+                tc.Write(cmd);
+            }
         }
         public void panLeft()
         {
@@ -996,7 +1047,40 @@ namespace Camera_PTZ
             tc.Write(cmd);
 
         }
+        public void tilt(double rate)//
+        {
 
+            if (Math.Abs(rate) > 1) return;
+            if (rate >= 0)
+            {
+                byte[] cmd = new byte[8];
+                //set rate
+                int irate = Convert.ToInt32(rate * 63);
+                cmd[0] = 0xFF;
+                cmd[1] = 0x00;
+                cmd[2] = 0x00;
+                cmd[3] = 0x08;
+                cmd[4] = 0x00;
+                cmd[5] = (byte)(irate);
+                cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+                tc.Write(cmd);
+            }
+            else
+            {
+                rate = -rate;
+                byte[] cmd = new byte[8];
+                //set rate
+                int irate = Convert.ToInt32(rate * 63);
+                cmd[0] = 0xFF;
+                cmd[1] = 0x00;
+                cmd[2] = 0x00;
+                cmd[3] = 0x10;
+                cmd[4] = 0x00;
+                cmd[5] = (byte)(irate);
+                cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+                tc.Write(cmd);
+            }
+        }
         public void tiltDown()
         {
 
@@ -1144,59 +1228,66 @@ namespace Camera_PTZ
         }
         public void Update()
         {
-            if (range == 0) return;
-            byte[] cmd = new byte[8];
-            //set azi ----------------------- 
-            ushort newazi = getAzi();
-            cmd[0] = 0xFF;
-            cmd[1] = 0x00;
-            cmd[2] = 0x05;
-            cmd[3] = 0x77;
-            cmd[4] = (byte)(newazi >> 8);
-            cmd[5] = (byte)(newazi);
-            cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
-            tc.Write(cmd);
-            //set elevation ---------------- 
-            ushort newEL = getEL();
-            cmd[0] = 0xFF;
-            cmd[1] = 0x00;
-            cmd[2] = 0x06;
-            cmd[3] = 0x77;
-            cmd[4] = (byte)(newEL >> 8);
-            cmd[5] = (byte)(newEL);
-            cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
-            tc.Write(cmd);
-            //set zoom  goto FF 00 07 77 ax xx---------------- 
-            ushort newZoom = getZoomIR();//IR camera zoom
-            cmd[0] = 0xFF;
-            cmd[1] = 0x00;
-            cmd[2] = 0x07;
-            cmd[3] = 0x77;
-            cmd[4] = (byte)((newZoom >> 8) | (0xA0));// //IR camera zoom
-            cmd[5] = (byte)(newZoom);
-            cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
-            tc.Write(cmd);
-            //Vis camera zoom
-            newZoom = getZoomVis();
-            cmd[0] = 0xFF;
-            cmd[1] = 0x00;
-            cmd[2] = 0x07;
-            cmd[3] = 0x77;
-            cmd[4] = (byte)((newZoom >> 8) | (0x60));// //VIS camera zoom
-            cmd[5] = (byte)(newZoom);
-            cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
-            tc.Write(cmd);
-            //set focus FF 00 08 77 ax xx---------------- 
-            ushort focus = (ushort)config.constants[7];//set standart focus
-            cmd[0] = 0xFF;
-            cmd[1] = 0x00;
-            cmd[2] = 0x08;
-            cmd[3] = 0x77;
-            cmd[4] = (byte)((focus >> 8) | ((byte)0x10));//focus go to min for visual
-            cmd[5] = (byte)(focus);
-            cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
-            tc.Write(cmd);
-
+            if (onTracking)
+            {
+                pan(x_track);
+                tilt(y_track);
+            }
+            else
+            {
+                if (range == 0) return;
+                byte[] cmd = new byte[8];
+                //set azi ----------------------- 
+                ushort newazi = getAzi();
+                cmd[0] = 0xFF;
+                cmd[1] = 0x00;
+                cmd[2] = 0x05;
+                cmd[3] = 0x77;
+                cmd[4] = (byte)(newazi >> 8);
+                cmd[5] = (byte)(newazi);
+                cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+                tc.Write(cmd);
+                //set elevation ---------------- 
+                ushort newEL = getEL();
+                cmd[0] = 0xFF;
+                cmd[1] = 0x00;
+                cmd[2] = 0x06;
+                cmd[3] = 0x77;
+                cmd[4] = (byte)(newEL >> 8);
+                cmd[5] = (byte)(newEL);
+                cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+                tc.Write(cmd);
+                //set zoom  goto FF 00 07 77 ax xx---------------- 
+                ushort newZoom = getZoomIR();//IR camera zoom
+                cmd[0] = 0xFF;
+                cmd[1] = 0x00;
+                cmd[2] = 0x07;
+                cmd[3] = 0x77;
+                cmd[4] = (byte)((newZoom >> 8) | (0xA0));// //IR camera zoom
+                cmd[5] = (byte)(newZoom);
+                cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+                tc.Write(cmd);
+                //Vis camera zoom
+                newZoom = getZoomVis();
+                cmd[0] = 0xFF;
+                cmd[1] = 0x00;
+                cmd[2] = 0x07;
+                cmd[3] = 0x77;
+                cmd[4] = (byte)((newZoom >> 8) | (0x60));// //VIS camera zoom
+                cmd[5] = (byte)(newZoom);
+                cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+                tc.Write(cmd);
+                //set focus FF 00 08 77 ax xx---------------- 
+                ushort focus = (ushort)config.constants[7];//set standart focus
+                cmd[0] = 0xFF;
+                cmd[1] = 0x00;
+                cmd[2] = 0x08;
+                cmd[3] = 0x77;
+                cmd[4] = (byte)((focus >> 8) | ((byte)0x10));//focus go to min for visual
+                cmd[5] = (byte)(focus);
+                cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+                tc.Write(cmd);
+            }
             //stabOff();
         }
 
@@ -1264,9 +1355,9 @@ namespace Camera_PTZ
             Update();
         }
 
-        internal void CamsSelect(int p)
+        internal void CamsSelect(bool p)
         {
-            isColorCam = (byte)p;
+            isColorCam = p;
         }
 
         internal void TurnOffCam()
@@ -1571,9 +1662,9 @@ namespace Camera_PTZ
             try
             {
                 
-                double sumvazi = 0, sumvtilt = 0;
+                double x_value = 0, y_value = 0;
                 int tracknum = 0;
-                bool onTracking = false;
+                //bool onTracking = false;
                 while (!_shouldStop)
                 {
                     
@@ -1582,42 +1673,42 @@ namespace Camera_PTZ
                     if (receive_byte_array[0] == 0xff)//nhan du lieu bam tu anh Thi
                     {
                         
-                        int a;
+                        int temp;
                         if (receive_byte_array[1] >> 7 > 0)
                         {
                             
-                            a = (receive_byte_array[1] << 8) | (receive_byte_array[2]) - 1 - 0xffff;
+                            temp = (receive_byte_array[1] << 8) | (receive_byte_array[2]) - 1 - 0xffff;
                             
 
                         }
                         else {
-                            a = (receive_byte_array[1] << 8) | (receive_byte_array[2]);
+                            temp = (receive_byte_array[1] << 8) | (receive_byte_array[2]);
                         }
-                        sumvazi += a / 15.0;
+                        x_value += temp / 15.0;// thay doi tuy theo truong hop
 
                         if (receive_byte_array[3] >> 7 > 0)
                         {
 
-                            a = (receive_byte_array[3] << 8) | (receive_byte_array[4]) - 1 - 0xffff;
+                            temp = (receive_byte_array[3] << 8) | (receive_byte_array[4]) - 1 - 0xffff;
 
                         }
                         else
                         {
-                            a = (receive_byte_array[3] << 8) | (receive_byte_array[4]);
+                            temp = (receive_byte_array[3] << 8) | (receive_byte_array[4]);
                         }
-                        sumvtilt += a / 20.0;
+                        y_value += temp / 20.0;//// thay doi tuy theo truong hop
                         
                         tracknum++;
                         if (tracknum > 0)
                         {
-                            if (sumvtilt > 0.8) sumvtilt = 0.8;
-                            if (sumvazi > 1.2) sumvazi = 1.2;
-                            if (sumvtilt < -0.8) sumvtilt = -0.8;
-                            if (sumvazi < -1.2) sumvazi = -1.2;
-                            if (isconnected) pelco_ptz.MoveXYZ(sumvazi, -sumvtilt, 0);
+                            if (y_value > 0.8) y_value = 0.8;
+                            if (x_value > 1.2) x_value = 1.2;
+                            if (y_value < -0.8) y_value = -0.8;
+                            if (x_value < -1.2) x_value = -1.2;
+                            if (isconnected) pelco_ptz.MoveXYZ(x_value, -y_value, 0);
                             tracknum = 0;
-                            sumvazi = 0;
-                            sumvtilt = 0;
+                            x_value = 0;
+                            y_value = 0;
                         }
                            
                     }
