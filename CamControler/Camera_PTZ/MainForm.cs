@@ -491,19 +491,21 @@ namespace Camera_PTZ
              bt4, bt5, bt6,
              bt7, bt8, bt9,
              bt10, bt11, bt12;
-        int cx, cy;
+        int joystick_x, joystick_y;
         int mArrow;
         // các biến trạng thái chung
+        private volatile bool _shouldStop = false;
+        public bool isColorCam = false;//biến chọn camera ảnh nhiệt/ảnh màu
+        private bool onTracking = false;// trang thai ba'm
         bool dialoghidden = false;
         public volatile bool tinhChinh = true;
         // trạng thái mục tiêu radar
         double bearing;// goc phuong vi
         double elevation;// goc ta`
         double range;// cu ly mt
-        public bool isColorCam = false;//biến chọn camera anh nhiet hay anh mau
-        private bool onTracking = false;// trang thai ba'm
+        
         public volatile Config config;
-        private volatile bool _shouldStop = false;
+        
         TelnetConnection tc;
         GuiMain m_Gui;
         double x_track = 0, y_track = 0;
@@ -532,11 +534,11 @@ namespace Camera_PTZ
         }
         private void DeviceDataReceived(byte[] data)
         {
-            int newcy = (data[2] >> 2) | ((data[3] & 0x0f) << 6);
-            newcy = (newcy - 512) / 16;
-            int newcx = (data[1] | ((data[2] & 0x03) << 8));
-            newcx = (newcx - 512) / 16;
-            int newvelo = 255 - data[6];
+            int newjy = (data[2] >> 2) | ((data[3] & 0x0f) << 6);
+            newjy = (newjy - 512) / 16;// giá trị từ -32 đến 32
+            int newjx = (data[1] | ((data[2] & 0x03) << 8));
+            newjx = (newjx - 512) / 16;// giá trị từ -32 đến 32
+            int newvelo = 255 - data[6];// giá trị từ 0 đến 255
             int new_mArrow = data[3] >> 4;
             int buttons = (data[5] | (data[7]) << 8);
             bool newbt1 = ((buttons & 0x01) > 0);
@@ -563,7 +565,7 @@ namespace Camera_PTZ
                     }
                     else if (!onTracking)
                     {
-                        byte[] dgram;// bat dau track
+                        byte[] dgram;// bắt đầu track
                         dgram = new byte[2];
                         dgram[0] = 0xff;
                         dgram[1] = 0x01;
@@ -589,7 +591,7 @@ namespace Camera_PTZ
             {
                 bt4 = newbt4;
 
-                if (bt4)// phong to cua so track
+                if (bt4)// phóng to cửa sổ bám
                 {
                     byte[] dgram;
                     dgram = new byte[2];
@@ -603,7 +605,7 @@ namespace Camera_PTZ
             {
                 bt6 = newbt6;
 
-                if (bt6)// thu nho cua so track
+                if (bt6)// thu nhỏ cửa sổ bám
                 {
                     byte[] dgram;
                     dgram = new byte[2];
@@ -616,13 +618,12 @@ namespace Camera_PTZ
             {
                 bt12 = newbt12;
 
-                if (bt12)
+                if (bt12)// ẩn/hiện giao diện hiển thị
                 {
                     if (dialoghidden)
                     {
 
                         ThreadSafe(() => m_Gui.ShowOpTop());
-
                         dialoghidden = false;
                     }
                     else
@@ -659,36 +660,60 @@ namespace Camera_PTZ
                 }
                 
             }
-            if ((newcx != cx || newcy != cy) && (mArrow == 8))
+            if (bt2&& (mArrow == 8))
             {
-                ThreadSafe(() => m_Gui.ViewtData(cx, cy, onTracking, isconnected));
-                double vazi, vtilt;
-                cx = newcx;
-                cy = newcy;
-                if (Math.Abs(cx) <= 1) vazi = 0; else vazi = cx / 10.0;
-                if (Math.Abs(cy) <= 1) vtilt = 0; else vtilt = -cy / 20.0;
-                if (isconnected && (!onTracking)) pelco_ptz.MoveXYZ(vazi, vtilt, 0);
+                
+                ThreadSafe(() => m_Gui.ViewtData(joystick_x, joystick_y, onTracking, true));
+                //double vazi, vtilt;
+                joystick_x = newjx;
+                joystick_y = newjy;
+                //if (Math.Abs(joystick_x) <= 1) vazi = 0; else vazi = joystick_x / 10.0;
+                //if (Math.Abs(joystick_y) <= 1) vtilt = 0; else vtilt = -joystick_y / 20.0;
+                //if ( (!onTracking)) pelco_ptz.MoveXYZ(vazi, vtilt, 0);
+                
             }
+            else 
+            {
+                joystick_x = 0;
+                joystick_y = 0;
+
+            }
+            
             //bt
             if (bt3 != newbt3)
             {
                 bt3 = newbt3;
-                PTZFacade.ZoomDirection zoomdir;
+                
                 if (bt3)
-                    zoomdir = PTZFacade.ZoomDirection.In;
+                {
+                    if (isColorCam)
+                        zoomVisIn();
+                    else
+                        zoomIRIn();
+                }
                 else
-                    zoomdir = PTZFacade.ZoomDirection.Stop;
-                if (isconnected) pelco_ptz.Zoom(zoomdir);
+                {
+                    zoomVisStop();
+                    zoomIRStop();
+                }
+                
             }
             if (bt5 != newbt5)
             {
                 bt5 = newbt5;
-                PTZFacade.ZoomDirection zoomdir;
+
                 if (bt5)
-                    zoomdir = PTZFacade.ZoomDirection.Out;
+                {
+                    if (isColorCam)
+                        zoomVisOut();
+                    else
+                        zoomIROut();
+                }
                 else
-                    zoomdir = PTZFacade.ZoomDirection.Stop;
-                if (isconnected) pelco_ptz.Zoom(zoomdir);
+                {
+                    zoomVisStop();
+                    zoomIRStop();
+                }
             }
 
             //double.TryParse(coor[1], out azi);//degrees
@@ -1148,6 +1173,18 @@ namespace Camera_PTZ
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
         }
+        public void zoomVisStop()
+        {
+            byte[] cmd = new byte[8];
+            cmd[0] = 0xFF;
+            cmd[1] = 0x00;
+            cmd[2] = 0x0E;
+            cmd[3] = 0x77;
+            cmd[4] = 0x00;
+            cmd[5] = 0x00;
+            cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+            tc.Write(cmd);
+        }
         public void zoomVisIn()
         {
             byte[] cmd = new byte[8];
@@ -1169,7 +1206,7 @@ namespace Camera_PTZ
             cmd[1] = 0x00;
             cmd[2] = 0x08;
             cmd[3] = 0x77;
-            cmd[4] = (byte)((focus >> 8) | ((byte)0x10));//focus go to min for visual
+            cmd[4] = (byte)((focus >> 8) | ((byte)0x10));//focus go to min for visible
             cmd[5] = (byte)(focus);
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
@@ -1203,7 +1240,7 @@ namespace Camera_PTZ
             tc.Write(cmd);
 
         }
-        public void zoomIRIn()//zoom IR cam
+        public void zoomIRIn()//zoom in IR cam
         {
             //zoomVisIn();
             byte[] cmd = new byte[8];
@@ -1218,6 +1255,20 @@ namespace Camera_PTZ
             cmd[3] = 0x20;
             cmd[4] = 0x00;
             cmd[5] = (byte)(rate);
+            cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+            tc.Write(cmd);
+        }
+        public void zoomIRStop()//zoom IR cam stop
+        {
+            //zoomVisIn();
+            byte[] cmd = new byte[8];
+            ushort newazi = getAzi();
+            cmd[0] = 0xFF;
+            cmd[1] = 0x00;
+            cmd[2] = 0x00;
+            cmd[3] = 0x20;
+            cmd[4] = 0x00;
+            cmd[5] = 0x00;
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
         }
