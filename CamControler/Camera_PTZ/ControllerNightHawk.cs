@@ -156,9 +156,13 @@ namespace Camera_PTZ
                 {
                     if (!dialoghidden)
                     {
-                        this.bearing = m_Gui.ListRadar[(m_Gui.selectedTargetIndex)].azi+config.constants[9];
-                        this.range = m_Gui.ListRadar[(m_Gui.selectedTargetIndex)].range*1.852;
-                        this.SetToRadarTarget();
+                        if(m_Gui.ListRadar.Count>m_Gui.selectedTargetIndex)
+                        {
+                            this.bearing = m_Gui.ListRadar[(m_Gui.selectedTargetIndex)].azi + config.constants[9];
+                            this.range = m_Gui.ListRadar[(m_Gui.selectedTargetIndex)].range * 1.852;
+                            this.SetToRadarTarget();
+                        }
+                        
                     }
                     else if (!onTracking)
                     {

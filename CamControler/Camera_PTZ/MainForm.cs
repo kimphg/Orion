@@ -32,6 +32,7 @@ namespace Camera_PTZ
     enum cameraType { pelco, nighthawk, flir } ;
     public partial class GuiMain : Form
     {
+
         public volatile bool connectionActive;
         Thread workerThread;
         //Socket UDPsock;
@@ -55,7 +56,7 @@ namespace Camera_PTZ
             InitializeComponent();
             //UDPsock = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
             button5.Enabled = true;
-            
+            camtype = cameraType.nighthawk;
             TopLevel = true;
             TopMost = true;
             connectionActive = false;
@@ -416,13 +417,13 @@ namespace Camera_PTZ
 
         internal void targetUp()
         {
-            if(selectedTargetIndex<10)selectedTargetIndex += 1;
+            if(selectedTargetIndex>0)selectedTargetIndex -= 1;
             showTargets();
         }
 
         internal void targetDown()
         {
-            if (selectedTargetIndex >0) selectedTargetIndex -= 1;
+            if (selectedTargetIndex < ListRadar.Count) selectedTargetIndex += 1;
             showTargets();
         }
 
