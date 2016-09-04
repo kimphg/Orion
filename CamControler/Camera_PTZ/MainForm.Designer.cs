@@ -332,7 +332,7 @@
             this.listBox1.ItemHeight = 24;
             this.listBox1.Location = new System.Drawing.Point(227, 12);
             this.listBox1.Name = "listBox1";
-            this.listBox1.Size = new System.Drawing.Size(377, 268);
+            this.listBox1.Size = new System.Drawing.Size(377, 292);
             this.listBox1.TabIndex = 27;
             // 
             // textBox1
@@ -340,7 +340,7 @@
             this.textBox1.Location = new System.Drawing.Point(14, 295);
             this.textBox1.Margin = new System.Windows.Forms.Padding(2);
             this.textBox1.Name = "textBox1";
-            this.textBox1.Size = new System.Drawing.Size(410, 20);
+            this.textBox1.Size = new System.Drawing.Size(207, 20);
             this.textBox1.TabIndex = 2;
             this.textBox1.TextChanged += new System.EventHandler(this.textBox2_TextChanged);
             // 
