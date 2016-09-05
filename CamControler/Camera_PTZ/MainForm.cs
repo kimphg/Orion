@@ -53,7 +53,13 @@ namespace Camera_PTZ
         TelnetConnection tc;
         public GuiMain()
         {
+
             InitializeComponent();
+            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.None;
+            
+            this.StartPosition = FormStartPosition.Manual;
+            this.Location = new Point(0 ,0 );
+            //this.Show();
             //UDPsock = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
             button5.Enabled = true;
             camtype = cameraType.nighthawk;
@@ -301,34 +307,40 @@ namespace Camera_PTZ
 
         private void timer1_Tick(object sender, EventArgs e)
         {
-            if (!connectionActive) return;
+            if (connectionActive) return;
             //FF 00 09 77 00 00
             try
             {
-                byte[] cmd = new byte[8];
-                cmd[0] = 0xFF;
-                cmd[1] = 0x00;
-                cmd[2] = 0x09;
-                cmd[3] = 0x77;
-                cmd[4] = 0x00;
-                cmd[5] = 0x00;
-                cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
-                tc.Write(cmd);
-                List<byte> input = tc.readBinary();
-                if (input.Count == 0) return;
-                if (input[0] == 0xFF && input[2] == 0x09 && input[3] == 0x77)
-                {
-                    double camazi = (input[4] << 8 | input[5]) / 65536.0 * 360.0;
-                    //MessageBox.Show("CAMAZI," + camazi.ToString());
-                    string sendData = "CAMAZI," + camazi.ToString() + ",";
-                    using (UdpClient c = new UdpClient(1111))
-                        c.Send(Encoding.ASCII.GetBytes(sendData), sendData.Length, "127.0.0.1",2917);
-                }
+
+                //_ptz = new PTZFacade(IPtextBox.Text.ToString(), textBox2.Text.ToString(), textBox3.Text.ToString());
+                //_ptz.Move(x, y, z);
+                tc = new TelnetConnection(IPtextBox.Text.ToString(), 23);
+                comandNH = new ControllerNightHawk(tc, this);
+                if (textBox2.Text.Length > 0) tc.Login(textBox2.Text.ToString(), textBox3.Text.ToString(), 100);
+                button1.Enabled = true;
+                button2.Enabled = true;
+                button3.Enabled = true;
+                button4.Enabled = true;
+                //button5.Enabled = true;
+                button6.Enabled = true;
+                button8.Enabled = true;
+
+                button_Connect.Enabled = false;
+                connectionActive = true;
+                workerThread = new Thread(comandNH.ListenToCommand);
+                workerThread.Start();
+                button_Connect.Text = "Đã kết nối camera";
+                button5.Text = "Ngắt kết nối";
+                Update();
             }
-            catch (Exception exc)
+            catch (Exception ex)
             {
+                //button_Connect.Text = "Kết nối thất bại, thử lại?";
+                //MessageBox.Show("Không tìm thấy camera tại địa chỉ đã chọn.");
+
                 return;
             }
+           
         }
 
         private void label5_Click(object sender, EventArgs e)
@@ -448,9 +460,9 @@ namespace Camera_PTZ
             
         }
 
-        public void ViewtData(int cx, int cy, bool onTracking, bool isconnected)
+        public void ViewtData(int cx, int cy,double azi, bool onTracking, bool isconnected)
         {
-            textBox1.Text = cx.ToString() + "|" + cy.ToString() + "|Track:" + onTracking.ToString() + "|Connected:" + isconnected.ToString();
+            textBox1.Text = "X:"+cx.ToString() + "|Y:" +"|Azi:"+azi.ToString("0.0") + cy.ToString() + "|Track:" + onTracking.ToString() + "|Connected:" + isconnected.ToString();
         }
 
         public void  GotoSelectedTarget()
@@ -691,7 +703,7 @@ namespace Camera_PTZ
             }
             if ((newcx != cx || newcy != cy) && (fineMove == 8))
             {
-                ThreadSafe(() => ptzControl.ViewtData(cx,cy,onTracking,isconnected));
+                //ThreadSafe(() => ptzControl.ViewtData(cx,cy,onTracking,isconnected));
                 double vazi, vtilt;
                 cx = newcx;
                 cy = newcy;

@@ -49,7 +49,7 @@
             this.button_Connect = new System.Windows.Forms.Button();
             this.button8 = new System.Windows.Forms.Button();
             this.notifyIcon = new System.Windows.Forms.NotifyIcon(this.components);
-            this.timer1 = new System.Windows.Forms.Timer(this.components);
+            this.ConnectingTimer = new System.Windows.Forms.Timer(this.components);
             this.comboBox1 = new System.Windows.Forms.ComboBox();
             this.label5 = new System.Windows.Forms.Label();
             this.timerPelcoCommand = new System.Windows.Forms.Timer(this.components);
@@ -79,7 +79,7 @@
             this.IPtextBox.Name = "IPtextBox";
             this.IPtextBox.Size = new System.Drawing.Size(98, 20);
             this.IPtextBox.TabIndex = 1;
-            this.IPtextBox.Text = "192.168.1.253";
+            this.IPtextBox.Text = "192.168.150.92";
             this.IPtextBox.TextChanged += new System.EventHandler(this.IPtextBox_TextChanged);
             // 
             // textBox2
@@ -290,11 +290,11 @@
             this.notifyIcon.Text = "Camera control";
             this.notifyIcon.MouseDoubleClick += new System.Windows.Forms.MouseEventHandler(this.notifyIcon_MouseDoubleClick);
             // 
-            // timer1
+            // ConnectingTimer
             // 
-            this.timer1.Enabled = true;
-            this.timer1.Interval = 500;
-            this.timer1.Tick += new System.EventHandler(this.timer1_Tick);
+            this.ConnectingTimer.Enabled = true;
+            this.ConnectingTimer.Interval = 1000;
+            this.ConnectingTimer.Tick += new System.EventHandler(this.timer1_Tick);
             // 
             // comboBox1
             // 
@@ -332,7 +332,7 @@
             this.listBox1.ItemHeight = 24;
             this.listBox1.Location = new System.Drawing.Point(227, 12);
             this.listBox1.Name = "listBox1";
-            this.listBox1.Size = new System.Drawing.Size(377, 292);
+            this.listBox1.Size = new System.Drawing.Size(377, 268);
             this.listBox1.TabIndex = 27;
             // 
             // textBox1
@@ -340,7 +340,7 @@
             this.textBox1.Location = new System.Drawing.Point(14, 295);
             this.textBox1.Margin = new System.Windows.Forms.Padding(2);
             this.textBox1.Name = "textBox1";
-            this.textBox1.Size = new System.Drawing.Size(207, 20);
+            this.textBox1.Size = new System.Drawing.Size(590, 20);
             this.textBox1.TabIndex = 2;
             this.textBox1.TextChanged += new System.EventHandler(this.textBox2_TextChanged);
             // 
@@ -407,7 +407,7 @@
         private System.Windows.Forms.Button button_Connect;
         private System.Windows.Forms.Button button8;
         private System.Windows.Forms.NotifyIcon notifyIcon;
-        private System.Windows.Forms.Timer timer1;
+        private System.Windows.Forms.Timer ConnectingTimer;
         private System.Windows.Forms.ComboBox comboBox1;
         private System.Windows.Forms.Label label5;
         private System.Windows.Forms.Timer timerPelcoCommand;

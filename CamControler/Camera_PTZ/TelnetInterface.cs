@@ -65,7 +65,7 @@ namespace Camera_PTZ
             if (!tcpSocket.Connected) return;
                         
             //byte[] buf = //System.Text.ASCIIEncoding.ASCII.GetBytes(cmd.Replace("\0xFF","\0xFF\0xFF"));
-            //tcpSocket.GetStream().Write(cmd, 0, cmd.Length);
+            tcpSocket.GetStream().Write(cmd, 0, cmd.Length);
         }
         public void Write(string cmd)
         {

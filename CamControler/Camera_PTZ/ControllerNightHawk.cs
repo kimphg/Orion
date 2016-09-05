@@ -34,7 +34,9 @@ namespace Camera_PTZ
         double bearing;// goc phuong vi
         double elevation;// goc ta`
         double range;// cu ly mt
+        double curCamAzi,curCamEle;
         System.Threading.Timer mUpdateTimer;
+        System.Threading.Timer askAziTimer;
         public volatile Config config;
 
         TelnetConnection tc;
@@ -53,15 +55,58 @@ namespace Camera_PTZ
             config = new Config();
             m_Gui = ptzControl;
             //mo socket
-            mUpdateTimer = new System.Threading.Timer(TimerCallback, null, 30, 30);
+            mUpdateTimer = new System.Threading.Timer(TimerCallback, null, 50, 50);
+            askAziTimer = new System.Threading.Timer(AskAzi, null, 100, 100);
             listener = new UdpClient(8001);
             groupEP = new IPEndPoint(IPAddress.Any, 0);
             initCommand();
         }
-        public void SetToRadarTarget()
+
+        private void AskAzi(object state)
+        {
+            try// check connection state
+            {
+                byte[] cmd = new byte[8];
+                cmd[0] = 0xFF;
+                cmd[1] = 0x00;
+                cmd[2] = 0x09;
+                cmd[3] = 0x77;
+                cmd[4] = 0x00;
+                cmd[5] = 0x00;
+                cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+                tc.Write(cmd);
+                cmd[0] = 0xFF;
+                cmd[1] = 0x00;
+                cmd[2] = 0x0A;
+                cmd[3] = 0x77;
+                cmd[4] = 0x00;
+                cmd[5] = 0x00;
+                cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+                tc.Write(cmd);
+
+                //read value
+                List<byte> input = tc.readBinary();
+                if (input.Count < 6) return;
+                if (input[0] == 0xFF && input[2] == 0x09 && input[3] == 0x77)
+                {
+                    curCamAzi = ((input[4] << 8) | input[5]) * 0.0054931640625;/// 65536.0 * 360.0;
+                    //ThreadSafe(() => m_Gui.ViewtData(joystick_x,joystick_y, (curCamAzi), onTracking, true));
+                }
+                else if (input[0] == 0xFF && input[2] == 0x0A && input[3] == 0x77)
+                {
+                    curCamEle = ((input[4] << 8) | input[5]) * 0.0054931640625;/// 65536.0 * 360.0;
+                    ThreadSafe(() => m_Gui.ViewtData(joystick_x, joystick_y, (curCamEle), onTracking, true));
+                }
+            }
+            catch (Exception exc)
+            {
+                return;
+            }
+        }
+        public void zoomToRadarTarget()
         {
             
-            if (range == 0) return;
+            /*if (range == 0) return;
             byte[] cmd = new byte[8];
             //set azi ----------------------- 
             ushort newazi = getAzi();
@@ -112,7 +157,49 @@ namespace Camera_PTZ
             cmd[4] = (byte)((focus >> 8) | ((byte)0x10));//focus go to min for visual
             cmd[5] = (byte)(focus);
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+            tc.Write(cmd);*/
+            if (range == 0) return;
+            byte[] cmd = new byte[8];
+            //set elevation ---------------- 
+            ushort newEL = getEL();
+            cmd[0] = 0xFF;
+            cmd[1] = 0x00;
+            cmd[2] = 0x06;
+            cmd[3] = 0x77;
+            cmd[4] = (byte)(newEL >> 8);
+            cmd[5] = (byte)(newEL);
+            cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
+            //set zoom  goto FF 00 07 77 ax xx---------------- 
+            ushort newZoom = getZoomIR();//IR camera zoom
+            cmd[0] = 0xFF;
+            cmd[1] = 0x00;
+            cmd[2] = 0x07;
+            cmd[3] = 0x77;
+            cmd[4] = (byte)((newZoom >> 8) | (0xA0));// //IR camera zoom
+            cmd[5] = (byte)(newZoom);
+            cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+            tc.Write(cmd);
+            //Vis camera zoom
+            newZoom = getZoomVis();
+            cmd[0] = 0xFF;
+            cmd[1] = 0x00;
+            cmd[2] = 0x07;
+            cmd[3] = 0x77;
+            cmd[4] = (byte)((newZoom >> 8) | (0x60));// //VIS camera zoom
+            cmd[5] = (byte)(newZoom);
+            cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+            tc.Write(cmd);
+            //set focus FF 00 08 77 ax xx---------------- 
+            //ushort focus = (ushort)config.constants[7];//set standart focus
+            //cmd[0] = 0xFF;
+            //cmd[1] = 0x00;
+            //cmd[2] = 0x08;
+            //cmd[3] = 0x77;
+            //cmd[4] = (byte)((focus >> 8) | ((byte)0x10));//focus go to min for visual
+            //cmd[5] = (byte)(focus);
+            //cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+            //tc.Write(cmd);
 
         }
         private void TimerCallback(object state)
@@ -160,7 +247,7 @@ namespace Camera_PTZ
                         {
                             this.bearing = m_Gui.ListRadar[(m_Gui.selectedTargetIndex)].azi + config.constants[9];
                             this.range = m_Gui.ListRadar[(m_Gui.selectedTargetIndex)].range * 1.852;
-                            this.SetToRadarTarget();
+                            this.zoomToRadarTarget();
                         }
                         
                     }
@@ -199,6 +286,39 @@ namespace Camera_PTZ
                     dgram[1] = 0x02;
                     listener.Send(dgram, 2, "127.0.0.1", 8000);
                 }
+            }
+            if (bt9 != newbt9)
+            {
+                bt9 = newbt9;
+                if (bt9) CamsSelect(true);
+            }
+            if (bt10 != newbt10)
+            {
+                bt10 = newbt10;
+                if (bt10) CamsSelect(false);
+                
+            }
+            if (bt7 != newbt7)
+            {
+                bt7 = newbt7;
+                if (bt7)
+                {
+                    if (m_Gui.selectedTargetIndex < m_Gui.ListRadar.Count)
+                    {
+                        this.bearing = m_Gui.ListRadar[(m_Gui.selectedTargetIndex)].azi + config.constants[9];
+                        this.range = m_Gui.ListRadar[(m_Gui.selectedTargetIndex)].range * 1.852;
+                        zoomToRadarTarget();
+                        stabOff();
+                        //FolowRadarTarget();
+                    } 
+                }
+                //else{stabOn();}
+            }
+            if (bt8 != newbt8)
+            {
+                bt8 = newbt8;
+                if (bt8) stabOff();
+                else stabOn();
             }
             if (bt6 != newbt6)
             {
@@ -268,11 +388,12 @@ namespace Camera_PTZ
                 }
 
             }
+            
             bt2 = newbt2;
             if (bt2 && (mArrow == 8))
             {
 
-                ThreadSafe(() => m_Gui.ViewtData(joystick_x, joystick_y, onTracking, true));
+                
                 //double vazi, vtilt;
                 joystick_x = newjx;
                 joystick_y = newjy;
@@ -304,7 +425,9 @@ namespace Camera_PTZ
                 {
                     zoomVisStop();
                     zoomIRStop();
+                    autoFocus();
                 }
+                
 
             }
             if (bt5 != newbt5)
@@ -322,7 +445,9 @@ namespace Camera_PTZ
                 {
                     zoomVisStop();
                     zoomIRStop();
+                    autoFocus();
                 }
+                
             }
 
             //double.TryParse(coor[1], out azi);//degrees
@@ -543,6 +668,53 @@ namespace Camera_PTZ
                 return;
             }
 
+        }
+        public void Update()
+        {
+            
+            if (onTracking)
+            {
+                pan(x_track);
+                tilt(y_track);
+            }
+             if (bt2)
+            {
+                double vPan = Convert.ToDouble(joystick_x / 32.0);// giá trị vPan từ -1 đến 1
+                double vTilt = Convert.ToDouble(joystick_y / 32.0);// giá trị vTilt từ -1 đến 1
+                
+                pan(vPan / 3.0);
+                tilt(vTilt / 3.0);
+            }
+            if (bt7)// track radar
+            {
+                if(m_Gui.selectedTargetIndex<m_Gui.ListRadar.Count)
+                {
+                    this.bearing = m_Gui.ListRadar[(m_Gui.selectedTargetIndex)].azi + config.constants[9];
+                    this.range = m_Gui.ListRadar[(m_Gui.selectedTargetIndex)].range * 1.852;
+                    
+                    FolowRadarTarget();
+                    
+                }
+               
+            }
+            //stabOff();
+             
+        }
+
+        private void FolowRadarTarget()
+        {
+            
+            AskAzi(null);
+            if (range == 0) return;
+            byte[] cmd = new byte[8];
+            //set azi ----------------------- 
+            double deltaAzi = bearing - curCamAzi;
+            if (deltaAzi > 180) deltaAzi -= 360;
+            if (deltaAzi < -180) deltaAzi += 360;
+            double panspeed = deltaAzi / 70;
+            if (panspeed > 0.5) panspeed = 0.5;
+            if (panspeed < -0.5) panspeed = -0.5;
+            pan(panspeed);
         }
 
         public void Stop()
@@ -898,78 +1070,7 @@ namespace Camera_PTZ
 
             return (ushort)(0xffff * ((bearing) / (360)));
         }
-        public void Update()
-        {
-            if (onTracking)
-            {
-                pan(x_track);
-                tilt(y_track);
-            }
-            else if (bt2)
-            {
-                double vPan = Convert.ToDouble(joystick_x / 32.0);// giá trị vPan từ -1 đến 1
-                double vTilt = Convert.ToDouble(joystick_y / 32.0);// giá trị vTilt từ -1 đến 1
-                pan(vPan / 5);
-                tilt(vTilt / 5);
-            }
-            else if (bt7)
-            {
-                if (range == 0) return;
-                byte[] cmd = new byte[8];
-                //set azi ----------------------- 
-                ushort newazi = getAzi();
-                cmd[0] = 0xFF;
-                cmd[1] = 0x00;
-                cmd[2] = 0x05;
-                cmd[3] = 0x77;
-                cmd[4] = (byte)(newazi >> 8);
-                cmd[5] = (byte)(newazi);
-                cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
-                tc.Write(cmd);
-                //set elevation ---------------- 
-                ushort newEL = getEL();
-                cmd[0] = 0xFF;
-                cmd[1] = 0x00;
-                cmd[2] = 0x06;
-                cmd[3] = 0x77;
-                cmd[4] = (byte)(newEL >> 8);
-                cmd[5] = (byte)(newEL);
-                cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
-                tc.Write(cmd);
-                //set zoom  goto FF 00 07 77 ax xx---------------- 
-                ushort newZoom = getZoomIR();//IR camera zoom
-                cmd[0] = 0xFF;
-                cmd[1] = 0x00;
-                cmd[2] = 0x07;
-                cmd[3] = 0x77;
-                cmd[4] = (byte)((newZoom >> 8) | (0xA0));// //IR camera zoom
-                cmd[5] = (byte)(newZoom);
-                cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
-                tc.Write(cmd);
-                //Vis camera zoom
-                newZoom = getZoomVis();
-                cmd[0] = 0xFF;
-                cmd[1] = 0x00;
-                cmd[2] = 0x07;
-                cmd[3] = 0x77;
-                cmd[4] = (byte)((newZoom >> 8) | (0x60));// //VIS camera zoom
-                cmd[5] = (byte)(newZoom);
-                cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
-                tc.Write(cmd);
-                //set focus FF 00 08 77 ax xx---------------- 
-                ushort focus = (ushort)config.constants[7];//set standart focus
-                cmd[0] = 0xFF;
-                cmd[1] = 0x00;
-                cmd[2] = 0x08;
-                cmd[3] = 0x77;
-                cmd[4] = (byte)((focus >> 8) | ((byte)0x10));//focus go to min for visual
-                cmd[5] = (byte)(focus);
-                cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
-                tc.Write(cmd);
-            }
-            //stabOff();
-        }
-
+        
 
 
         private ushort getZoomIR()
