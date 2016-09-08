@@ -8,7 +8,10 @@ using System.Threading;
 using System.Runtime.InteropServices;
 using System.IO;
 using UsbHid;
+
 using UsbHid.USB.Classes.Messaging;
+using System.Diagnostics;
+//PA = B2 A5 E6 93
 namespace Camera_PTZ
 {
     public class ControllerNightHawk
@@ -23,49 +26,84 @@ namespace Camera_PTZ
              bt7 = false, bt8 = false, bt9 = false,
              bt10 = false, bt11 = false, bt12 = false;
         int joystick_x, joystick_y;
+        int focusIr = 95;// tu 0 den 100
+        int focusVis = 955;// tu 900 den 1000
+        int zoomFovVis=16;// gia tri tu 0 den 16
+        int zoomFovIr = 8;// gia tri tu 0 den 8
+        double joystick_sensitive;//joystick sensitive
         int mArrow;
         // các biến trạng thái chung
         private volatile bool _shouldStop = false;
-        public bool isColorCam = false;//biến chọn camera ảnh nhiệt/ảnh màu
+        public bool isVisCam = false;//biến chọn camera ảnh nhiệt/ảnh màu
+        public bool fogFilter = false;
         private bool onTracking = false;// trang thai ba'm
         bool dialoghidden = false;
         public volatile bool tinhChinh = true;
         // trạng thái mục tiêu radar
         double bearing;// goc phuong vi
-        double elevation;// goc ta`
+        double deltaH = 40;// chenh lech do cao
         double range;// cu ly mt
-        double curCamAzi,curCamEle;
+        double curCamAzi;
+        double deltaAzi;
+        //bool onRadarTracking = false;
         System.Threading.Timer mUpdateTimer;
         System.Threading.Timer askAziTimer;
-        public volatile Config config;
-
+        bool joystickOnline = false;
         TelnetConnection tc;
         GuiMain m_Gui;
         double x_track = 0, y_track = 0;
+        private int errCount =-50;
         public ControllerNightHawk(TelnetConnection tconnect, GuiMain ptzControl)
         {
+            //restartTracker();// restart chuong trinh cua anh Thi
             //ket noi den joystick
             pDevice = new UsbHidDevice(0x046D, 0xC215);
             //pDevice.OnConnected += DeviceOnConnected;
             //pDevice.OnDisConnected += DeviceOnDisConnected;
             pDevice.DataReceived += DeviceDataReceived;
-            pDevice.Connect();
+            joystickOnline = pDevice.Connect();
             // ket noi den camera
             tc = tconnect;
-            config = new Config();
             m_Gui = ptzControl;
             //mo socket
-            mUpdateTimer = new System.Threading.Timer(TimerCallback, null, 50, 50);
-            askAziTimer = new System.Threading.Timer(AskAzi, null, 100, 100);
+            mUpdateTimer = new System.Threading.Timer(TimerCallback, null, 100, 100);
+            askAziTimer = new System.Threading.Timer(Timer200, null, 200, 200);
             listener = new UdpClient(8001);
             groupEP = new IPEndPoint(IPAddress.Any, 0);
             initCommand();
         }
-
-        private void AskAzi(object state)
+        void restartTracker()
         {
+            try
+            {
+                foreach (var process in Process.GetProcessesByName("TrackCam"))
+                {
+                    process.Kill();
+                }
+                System.Threading.Thread.Sleep(300);
+                Process process2 = new Process();
+                process2.StartInfo.FileName = m_Gui.mConfig.trackerFile;
+                process2.StartInfo.WorkingDirectory = m_Gui.mConfig.WorkingDir;
+                process2.Start();
+
+                errCount = 0;
+            }
+            catch (Exception e)
+            {
+                return;
+            }
+           
+        }
+        private void Timer200(object state)
+        {
+
             try// check connection state
             {
+                errCount++;
+                if (errCount > 20) { 
+                    restartTracker();
+                    errCount = 0;
+                }
                 byte[] cmd = new byte[8];
                 cmd[0] = 0xFF;
                 cmd[1] = 0x00;
@@ -83,30 +121,65 @@ namespace Camera_PTZ
                 cmd[5] = 0x00;
                 cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
                 tc.Write(cmd);
-
                 //read value
                 List<byte> input = tc.readBinary();
-                if (input.Count < 6) return;
-                if (input[0] == 0xFF && input[2] == 0x09 && input[3] == 0x77)
+                
+                int i = 0;
+                while(true)
                 {
-                    curCamAzi = ((input[4] << 8) | input[5]) * 0.0054931640625;/// 65536.0 * 360.0;
-                    //ThreadSafe(() => m_Gui.ViewtData(joystick_x,joystick_y, (curCamAzi), onTracking, true));
+                    int pos = i * 7;
+                    i++;
+                    if (pos+6 > input.Count) break;
+                    if (input[pos] == 0xFF && input[pos+2] == 0x09 && input[pos+3] == 0x77)
+                    {
+                        curCamAzi = ((input[pos + 4] << 8) | input[pos + 5]) * 0.0054931640625 - m_Gui.mConfig.constants[2];/// 65536.0 * 360.0;
+                        if (curCamAzi >= 360) curCamAzi -= 360.0;
+                        if (curCamAzi < 0) curCamAzi += 360.0;
+                        byte[] dgram;// gui azi cho anh Thi
+                        int azi = (int)(curCamAzi*100);
+                        dgram = new byte[3];
+                        dgram[0] = 0xfb;
+                        dgram[1] = ((byte)(azi>>8));
+                        dgram[2] = ((byte)(azi));
+                        listener.Send(dgram, 3, "127.0.0.1", 8000);
+                        deltaAzi = bearing - curCamAzi;
+                        if (deltaAzi > 180) deltaAzi -= 360;
+                        if (deltaAzi < -180) deltaAzi += 360;
+                        //ThreadSafe(() => m_Gui.ViewtData(joystick_x, joystick_y, (curCamAzi-config.constants[0]), onTracking, true));
+                    }
+                    else if (input[pos] == 0xFF && input[pos + 2] == 0x0A && input[pos + 3] == 0x77)
+                    {
+                        double curCamEle = ((input[pos + 4] << 8) | input[pos + 5]) * 0.0054931640625;/// 65536.0 * 360.0;
+                        byte[] dgram;// gui ele cho anh Thi
+                        int ele = (int)(curCamEle*100);
+                        dgram = new byte[3];
+                        dgram[0] = 0xfc;
+                        dgram[1] = ((byte)(ele>>8));
+                        dgram[2] = ((byte)(ele));
+                        listener.Send(dgram, 3, "127.0.0.1", 8000);
+
+                        
+                        //ThreadSafe(() => m_Gui.ViewtData(joystick_x, joystick_y, (curCamAzi-config.constants[0]), onTracking, true));
+                    }
                 }
-                else if (input[0] == 0xFF && input[2] == 0x0A && input[3] == 0x77)
-                {
-                    curCamEle = ((input[4] << 8) | input[5]) * 0.0054931640625;/// 65536.0 * 360.0;
-                    ThreadSafe(() => m_Gui.ViewtData(joystick_x, joystick_y, (curCamEle), onTracking, true));
-                }
+                
+                //else if (input[0] == 0xFF && input[2] == 0x0A && input[3] == 0x77)
+                //{
+                //    double curCamEle = ((input[4] << 8) | input[5]) * 0.0054931640625;/// 65536.0 * 360.0;
+                //    ThreadSafe(() => m_Gui.ViewtData(joystick_x, joystick_y, (curCamEle), onTracking, true));
+                //}
             }
             catch (Exception exc)
             {
                 return;
             }
         }
-        public void zoomToRadarTarget()
+        public void StartRadarTargetTrack()
         {
             
-            /*if (range == 0) return;
+            if (range == 0) return;
+            stabOn();
+            Thread.Sleep(500);
             byte[] cmd = new byte[8];
             //set azi ----------------------- 
             ushort newazi = getAzi();
@@ -118,6 +191,7 @@ namespace Camera_PTZ
             cmd[5] = (byte)(newazi);
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
+            Thread.Sleep(300);
             //set elevation ---------------- 
             ushort newEL = getEL();
             cmd[0] = 0xFF;
@@ -128,99 +202,64 @@ namespace Camera_PTZ
             cmd[5] = (byte)(newEL);
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
+            Thread.Sleep(300);
             //set zoom  goto FF 00 07 77 ax xx---------------- 
-            ushort newZoom = getZoomIR();//IR camera zoom
+            int newZoom = getZoomIR();//IR camera zoom
             cmd[0] = 0xFF;
             cmd[1] = 0x00;
             cmd[2] = 0x07;
             cmd[3] = 0x77;
-            cmd[4] = (byte)((newZoom >> 8) | (0xA0));// //IR camera zoom
+            cmd[4] = (byte)((newZoom >> 8) | (0xB0));// //IR camera zoom
             cmd[5] = (byte)(newZoom);
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
+            Thread.Sleep(300);
             //Vis camera zoom
             newZoom = getZoomVis();
             cmd[0] = 0xFF;
             cmd[1] = 0x00;
             cmd[2] = 0x07;
             cmd[3] = 0x77;
-            cmd[4] = (byte)((newZoom >> 8) | (0x60));// //VIS camera zoom
+            cmd[4] = (byte)((newZoom >> 8) | (0x70));// //VIS camera zoom
             cmd[5] = (byte)(newZoom);
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
             //set focus FF 00 08 77 ax xx---------------- 
-            ushort focus = (ushort)config.constants[7];//set standart focus
-            cmd[0] = 0xFF;
-            cmd[1] = 0x00;
-            cmd[2] = 0x08;
-            cmd[3] = 0x77;
-            cmd[4] = (byte)((focus >> 8) | ((byte)0x10));//focus go to min for visual
-            cmd[5] = (byte)(focus);
-            cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
-            tc.Write(cmd);*/
-            if (range == 0) return;
-            byte[] cmd = new byte[8];
-            //set elevation ---------------- 
-            ushort newEL = getEL();
-            cmd[0] = 0xFF;
-            cmd[1] = 0x00;
-            cmd[2] = 0x06;
-            cmd[3] = 0x77;
-            cmd[4] = (byte)(newEL >> 8);
-            cmd[5] = (byte)(newEL);
-            cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
-            tc.Write(cmd);
-            //set zoom  goto FF 00 07 77 ax xx---------------- 
-            ushort newZoom = getZoomIR();//IR camera zoom
-            cmd[0] = 0xFF;
-            cmd[1] = 0x00;
-            cmd[2] = 0x07;
-            cmd[3] = 0x77;
-            cmd[4] = (byte)((newZoom >> 8) | (0xA0));// //IR camera zoom
-            cmd[5] = (byte)(newZoom);
-            cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
-            tc.Write(cmd);
-            //Vis camera zoom
-            newZoom = getZoomVis();
-            cmd[0] = 0xFF;
-            cmd[1] = 0x00;
-            cmd[2] = 0x07;
-            cmd[3] = 0x77;
-            cmd[4] = (byte)((newZoom >> 8) | (0x60));// //VIS camera zoom
-            cmd[5] = (byte)(newZoom);
-            cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
-            tc.Write(cmd);
-            //set focus FF 00 08 77 ax xx---------------- 
-            //ushort focus = (ushort)config.constants[7];//set standart focus
-            //cmd[0] = 0xFF;
-            //cmd[1] = 0x00;
-            //cmd[2] = 0x08;
-            //cmd[3] = 0x77;
-            //cmd[4] = (byte)((focus >> 8) | ((byte)0x10));//focus go to min for visual
-            //cmd[5] = (byte)(focus);
-            //cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
-            //tc.Write(cmd);
+            setStandartFocus();
+            Thread.Sleep(2000);
+            stabOff();
+            Stop();
+        }
 
+        private void setStandartFocus()
+        {
+             focusVis = 956;//set standart focus
+             focusIr = 95;
+             UpdateFocus();
         }
         private void TimerCallback(object state)
         {
-
             if (m_Gui.connectionActive) Update();
         }
         private void ThreadSafe(MethodInvoker method)
         {
-            if (m_Gui.InvokeRequired)
-                m_Gui.Invoke(method);
-            else
-                method();
+            if(m_Gui!=null)
+            {
+                if (m_Gui.InvokeRequired)
+                    m_Gui.Invoke(method);
+                else
+                    method();
+            }
+            
         }
         private void DeviceDataReceived(byte[] data)
         {
+            
             int newjy = (data[2] >> 2) | ((data[3] & 0x0f) << 6);
-            newjy = (newjy - 512) / 16;// giá trị từ -32 đến 32
+            joystick_y = (newjy - 512) / 8;// giá trị từ -64 đến 64
             int newjx = (data[1] | ((data[2] & 0x03) << 8));
-            newjx = (newjx - 512) / 16;// giá trị từ -32 đến 32
-            int newvelo = 255 - data[6];// giá trị từ 0 đến 255
+            joystick_x = (newjx - 512) / 8;// giá trị từ -64 đến 64
+            joystick_sensitive = (255.0 - Convert.ToDouble(data[6]))/255.0;// giá trị từ 0 đến 255
             int new_mArrow = data[3] >> 4;
             int buttons = (data[5] | (data[7]) << 8);
             bool newbt1 = ((buttons & 0x01) > 0);
@@ -236,19 +275,28 @@ namespace Camera_PTZ
             bool newbt11 = ((buttons & 0x0400) > 0);
             bool newbt12 = ((buttons & 0x0800) > 0);
             //xy motion
+            if (newbt1 && newbt2 && newbt11)
+            {
+                this.TurnOffCam();
+                ThreadSafe(() => m_Gui.exitCam());
+                return;
+            }
             if (bt1 != newbt1)
             {
                 bt1 = newbt1;
                 if (bt1)
                 {
-                    if (!dialoghidden)
+                    if (bt1&&!dialoghidden)
                     {
                         if(m_Gui.ListRadar.Count>m_Gui.selectedTargetIndex)
                         {
-                            this.bearing = m_Gui.ListRadar[(m_Gui.selectedTargetIndex)].azi + config.constants[9];
+                            this.bearing = m_Gui.ListRadar[(m_Gui.selectedTargetIndex)].azi + m_Gui.mConfig.constants[2];
+                            if (bearing >= 360) bearing -= 360;
+                            if (bearing < 0) bearing += 360;
                             this.range = m_Gui.ListRadar[(m_Gui.selectedTargetIndex)].range * 1.852;
-                            this.zoomToRadarTarget();
+                            this.StartRadarTargetTrack();
                         }
+                        //ThreadSafe(() => m_Gui.ViewtData(x_track, y_track, (curCamAzi), onTracking, true));
                         
                     }
                     else if (!onTracking)
@@ -268,6 +316,7 @@ namespace Camera_PTZ
                         dgram[1] = 0x00;
                         listener.Send(dgram, 2, "127.0.0.1", 8000);
                         Stop();
+                        resettracking();
                         onTracking = false;
                     }
                 }
@@ -278,65 +327,135 @@ namespace Camera_PTZ
             if (bt4 != newbt4)
             {
                 bt4 = newbt4;
-                if (bt4)// phóng to cửa sổ bám
+                if (bt4)
                 {
+                    // chuyen camera
+                    if (isVisCam) CamsSelect(false);
+                    else CamsSelect(true);
+                }
+            }
+            if (bt9 != newbt9)
+            {
+                bt9 = newbt9;
+                if (bt11 && bt9)
+                {
+                    toggleTubolenceMitig();
+                }
+                else if (bt9)
+                {
+                    // thu nhỏ cửa sổ bám
+                    byte[] dgram;
+                    dgram = new byte[2];
+                    dgram[0] = 0xff;
+                    dgram[1] = 0x03;
+                    listener.Send(dgram, 2, "127.0.0.1", 8000);
+                    
+                }
+            }
+            if (bt10 != newbt10)
+            {
+                bt10 = newbt10;
+                if(bt11&&bt10)
+                {
+                    // bat/tat loc suong mu
+                    toggleFogFilter();
+                }
+                else if (bt10)
+                {
+                    //Phong to cua so bam
                     byte[] dgram;
                     dgram = new byte[2];
                     dgram[0] = 0xff;
                     dgram[1] = 0x02;
                     listener.Send(dgram, 2, "127.0.0.1", 8000);
                 }
-            }
-            if (bt9 != newbt9)
-            {
-                bt9 = newbt9;
-                if (bt9) CamsSelect(true);
-            }
-            if (bt10 != newbt10)
-            {
-                bt10 = newbt10;
-                if (bt10) CamsSelect(false);
                 
+                
+            }
+            if (bt11 != newbt11)
+            {
+                bt11 = newbt11;
+            //    if (bt11) stabOn();
+            //    else 
+            //    stabOff();
             }
             if (bt7 != newbt7)
             {
                 bt7 = newbt7;
                 if (bt7)
                 {
-                    if (m_Gui.selectedTargetIndex < m_Gui.ListRadar.Count)
+                    if (isVisCam)
                     {
-                        this.bearing = m_Gui.ListRadar[(m_Gui.selectedTargetIndex)].azi + config.constants[9];
-                        this.range = m_Gui.ListRadar[(m_Gui.selectedTargetIndex)].range * 1.852;
-                        zoomToRadarTarget();
-                        stabOff();
-                        //FolowRadarTarget();
-                    } 
+                        if (focusVis > 940) focusVis--;
+
+                    }
+                    else
+                    {
+                        if (focusIr > 80) focusIr--;
+
+                    }
+                    UpdateFocus();
                 }
-                //else{stabOn();}
             }
             if (bt8 != newbt8)
             {
                 bt8 = newbt8;
-                if (bt8) stabOff();
-                else stabOn();
+                if (bt11 && bt8)
+                {
+                    toggleMul2x();
+                }
+                else if (bt8)
+                {
+                    if (isVisCam)
+                    {
+                        if (focusVis < 980) focusVis++;
+
+                    }
+                    else
+                    {
+                        if (focusIr < 110) focusIr++;
+
+                    }
+                    UpdateFocus();
+
+                }
             }
             if (bt6 != newbt6)
             {
                 bt6 = newbt6;
 
-                if (bt6)// thu nhỏ cửa sổ bám
+                if (bt6)
                 {
-                    byte[] dgram;
-                    dgram = new byte[2];
-                    dgram[0] = 0xff;
-                    dgram[1] = 0x03;
-                    listener.Send(dgram, 2, "127.0.0.1", 8000);
+                    
+                    if (isRecording)
+                    {
+                        //tat ghi luu
+                        isRecording = false;
+                        byte[] dgram;
+                        dgram = new byte[2];
+                        dgram[0] = 0xfa;
+                        dgram[1] = 0x00;
+                        listener.Send(dgram, 2, "127.0.0.1", 8000);
+                    }
+                    else {
+                        //bat ghi luu
+                        isRecording = true;
+                        byte[] dgram;
+                        dgram = new byte[2];
+                        dgram[0] = 0xfa;
+                        dgram[1] = 0x01;
+                        listener.Send(dgram, 2, "127.0.0.1", 8000);
+                    }
                 }
             }
             if (bt12 != newbt12)
             {
                 bt12 = newbt12;
-                if (bt12)// ẩn/hiện giao diện hiển thị
+                if (bt12&bt11)// ẩn/hiện giao diện hiển thị
+                {
+                    toggleStab();
+                }
+                else if (bt12)// ẩn/hiện giao diện hiển thị
                 {
                     if (dialoghidden)
                     {
@@ -367,7 +486,7 @@ namespace Camera_PTZ
                         if (!dialoghidden)
                         {
                             ThreadSafe(() => m_Gui.targetDown());
-                            return;
+                            break;
                         }
                         tiltDown();
                         break;
@@ -378,7 +497,7 @@ namespace Camera_PTZ
                         if (!dialoghidden)
                         {
                             ThreadSafe(() => m_Gui.targetUp());
-                            return;
+                            break;
                         }
                         tiltUp();
                         break;
@@ -388,27 +507,13 @@ namespace Camera_PTZ
                 }
 
             }
+            if (bt2 != newbt2)
+            {
+                bt2 = newbt2;
+                if (!bt2) Stop();
+            }
             
-            bt2 = newbt2;
-            if (bt2 && (mArrow == 8))
-            {
-
-                
-                //double vazi, vtilt;
-                joystick_x = newjx;
-                joystick_y = newjy;
-                //if (Math.Abs(joystick_x) <= 1) vazi = 0; else vazi = joystick_x / 10.0;
-                //if (Math.Abs(joystick_y) <= 1) vtilt = 0; else vtilt = -joystick_y / 20.0;
-                //if ( (!onTracking)) pelco_ptz.MoveXYZ(vazi, vtilt, 0);
-
-            }
-            else
-            {
-                joystick_x = 0;
-                joystick_y = 0;
-
-            }
-
+            
             //bt
             if (bt3 != newbt3)
             {
@@ -416,17 +521,10 @@ namespace Camera_PTZ
 
                 if (bt3)
                 {
-                    if (isColorCam)
-                        zoomVisIn();
-                    else
-                        zoomIRIn();
+                    ZoomActiveOut();
+                    
                 }
-                else
-                {
-                    zoomVisStop();
-                    zoomIRStop();
-                    autoFocus();
-                }
+                
                 
 
             }
@@ -436,16 +534,8 @@ namespace Camera_PTZ
 
                 if (bt5)
                 {
-                    if (isColorCam)
-                        zoomVisOut();
-                    else
-                        zoomIROut();
-                }
-                else
-                {
-                    zoomVisStop();
-                    zoomIRStop();
-                    autoFocus();
+                    ZoomActiveIn();
+                    
                 }
                 
             }
@@ -459,10 +549,137 @@ namespace Camera_PTZ
 
         }
 
+        private void toggleStab()
+        {
+            if (stabilizOn)
+            {
+                stabilizOn = false;
+                stabOff();
+            }
+            else 
+            {
+                stabilizOn = true;
+                stabOn();
+            }
+        }
+
+        private void toggleMul2x()
+        {
+            if (teleMul)
+            {
+                byte[] cmd = new byte[8]; 
+                cmd[0] = 0xFF;
+                cmd[1] = 0x00;
+                cmd[2] = 0x32;
+                cmd[3] = 0x77;
+                cmd[4] = 0x02;
+                cmd[5] = 0x00;
+                cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+                tc.Write(cmd);
+                teleMul = false;
+            }
+            else {
+                byte[] cmd = new byte[8];
+                cmd[0] = 0xFF;
+                cmd[1] = 0x00;
+                cmd[2] = 0x32;
+                cmd[3] = 0x77;
+                cmd[4] = 0x02;
+                cmd[5] = 0x01;
+                cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+                tc.Write(cmd);
+
+                teleMul = true;
+
+            }
+        }
+        
+        private void toggleTubolenceMitig()
+        {
+            if (turboLence)
+            {
+                byte[] cmd = new byte[8];
+                //PA: B2 A5 E6 93
+                cmd[0] = 0xFF;
+                cmd[1] = 0x00;
+                cmd[2] = 0x24;
+                cmd[3] = 0x77;
+                cmd[4] = 0x13;
+                cmd[5] = 0x00;
+                cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+                tc.Write(cmd);
+                turboLence = false;
+
+            }
+            else {
+                byte[] cmd = new byte[8];
+                //PA: B2 A5 E6 93
+                cmd[0] = 0xFF;
+                cmd[1] = 0x00;
+                cmd[2] = 0x24;
+                cmd[3] = 0x77;
+                cmd[4] = 0x13;
+                cmd[5] = 0x10;
+                cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+                tc.Write(cmd);
+                turboLence = true;
+            }
+            
+        }
+
+        private void toggleFogFilter()
+        {
+            if (fogFilter)
+            {
+                byte[] cmd = new byte[8];
+                //PA: B2 A5 E6 93
+                cmd[0] = 0xFF;
+                cmd[1] = 0x00;
+                cmd[2] = 0x11;
+                cmd[3] = 0x77;
+                cmd[4] = 0x32;
+                cmd[5] = 0x00;
+                cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+                tc.Write(cmd);
+                fogFilter = false;
+            }
+            else
+            {
+                byte[] cmd = new byte[8];
+                //PA: B2 A5 E6 93
+                cmd[0] = 0xFF;
+                cmd[1] = 0x00;
+                cmd[2] = 0x11;
+                cmd[3] = 0x77;
+                cmd[4] = 0x32;
+                cmd[5] = 0x02;
+                cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+                tc.Write(cmd);
+                fogFilter = true;
+            }
+        }
+
+        private void resettracking()
+        {
+            x_track = 0;
+            y_track = 0;
+            x_target = 0;
+            y_target = 0;
+        }
+
         
         private void initCommand()
         {
-
+            restartTracker();
+            UpdateZoom();
+            UpdateFocus();
+            CamsSelect(true);// chon camera Vis
+            stabOff();
+            //stabOn();
+            ThreadSafe(() => m_Gui.HideToTray());
+            dialoghidden = true;
+            
+            //setMaxGoToRate();
         }
         private void stabOn()
         {
@@ -490,48 +707,89 @@ namespace Camera_PTZ
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
         }
+        void setMaxGoToRate()
+        { 
+            //byte[] cmd = new byte[8];
+            //cmd[0] = 0xB2;
+            //cmd[1] = 0xA5;
+            //cmd[2] = 0xE6;
+            //cmd[3] = 0x93;
+            //cmd[4] = 0x42;
+            //cmd[5] = 0x00;
+            //cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+            //tc.Write(cmd);
+        
+        }
+        double x_target=0, y_target=0;
+        private bool turboLence = false;
+        private bool teleMul = false;
+        private bool stabilizOn = false;
+        private bool isRecording = false;
         public void ListenToCommand()
         {
             _shouldStop = false;
-            try
+
+
+            while (!_shouldStop)
             {
-                while (!_shouldStop)
+                try
                 {
                     byte[] receive_byte_array = listener.Receive(ref groupEP);
                     string received_data = Encoding.ASCII.GetString(receive_byte_array, 0, receive_byte_array.Length);
-                    if (receive_byte_array[0] == 0xff)//nhan du lieu bam tu anh Thi
+                    if (receive_byte_array[0] == 0xff)
+                        errCount = 0;
+                    if (receive_byte_array[0] == 0xff && receive_byte_array.Length == 5)//nhan du lieu bam tu anh Thi
                     {
 
                         int temp;
                         //lay gia tri x_track
-                        if (receive_byte_array[1] >> 7 > 0)
+                        if (receive_byte_array[1] == 0
+                            && receive_byte_array[2] == 0
+                            && receive_byte_array[3] == 0
+                            && receive_byte_array[4] == 0)
                         {
-
-                            temp = (receive_byte_array[1] << 8) | (receive_byte_array[2]) - 1 - 0xffff;
-
-
+                            if (onTracking)
+                            {
+                                onTracking = false;
+                                Stop();
+                                resettracking();
+                            }
                         }
                         else
                         {
-                            temp = (receive_byte_array[1] << 8) | (receive_byte_array[2]);
-                        }
-                        x_track += temp / 1500.0;// thay doi tuy theo truong hop
-                        //lay gia tri y_track
-                        if (receive_byte_array[3] >> 7 > 0)
-                        {
+                            onTracking = true;
+                            if (receive_byte_array[1] >> 7 > 0)
+                            {
 
-                            temp = (receive_byte_array[3] << 8) | (receive_byte_array[4]) - 1 - 0xffff;
+                                temp = (receive_byte_array[1] << 8) | (receive_byte_array[2]) - 1 - 0xffff;
+
+
+                            }
+                            else
+                            {
+                                temp = (receive_byte_array[1] << 8) | (receive_byte_array[2]);
+                            }
+
+                            // tich luy 
+                            x_target = (Convert.ToDouble(temp) / 50.0);
+                            x_track += x_target;
+                            //lay gia tri y_track
+                            if (receive_byte_array[3] >> 7 > 0)
+                            {
+
+                                temp = (receive_byte_array[3] << 8) | (receive_byte_array[4]) - 1 - 0xffff;
+
+                            }
+                            else
+                            {
+                                temp = (receive_byte_array[3] << 8) | (receive_byte_array[4]);
+                            }
+                            
+                            y_target = (Convert.ToDouble(temp) / 50.0);
+                            y_track += y_target;
+                             
 
                         }
-                        else
-                        {
-                            temp = (receive_byte_array[3] << 8) | (receive_byte_array[4]);
-                        }
-                        y_track += temp / 2000.0;//// thay doi tuy theo truong hop
-                        if (y_track > 1) y_track = 1;
-                        if (x_track > 1) x_track = 1;
-                        if (y_track < -1) y_track = -1;
-                        if (x_track < -1) x_track = -1;
                     }
                     string[] strList = received_data.Split(',');
 
@@ -552,7 +810,7 @@ namespace Camera_PTZ
                     {
                         double.TryParse(coor[1], out bearing);//degrees
                         //azi = azi / 3.141592654 * 180;
-                        double.TryParse(coor[2], out elevation);//m
+                        double.TryParse(coor[2], out deltaH);//m
                         double.TryParse(coor[3], out range);//km
                         //if(y>0)config.constants[0] = y;
                         //ialpha = (unsigned short)(0xffff*alpha/(2*3.141592654));
@@ -633,7 +891,7 @@ namespace Camera_PTZ
                                 focusVNear();
                                 break;
                             case "VFR":
-                                focusVFar();
+                                //focusVFar();
                                 break;
                             case "INR":
                                 focusINear();
@@ -642,7 +900,7 @@ namespace Camera_PTZ
                                 focusIFar();
                                 break;
                             case "AF":
-                                autoFocus();
+                                //autoFocusIr();
                                 break;
                             case "STOP":
                                 Stop();
@@ -661,62 +919,104 @@ namespace Camera_PTZ
 
                 }
 
+
+                catch (Exception ex)
+                {
+                    //MessageBox.Show(ex.Message);
+                    continue;
+                }
             }
-            catch (Exception ex)
-            {
-                //MessageBox.Show(ex.Message);
-                return;
-            }
+            
 
         }
         public void Update()
         {
             
+            //if (!joystickOnline) joystickOnline = pDevice.Connect();
             if (onTracking)
             {
-                pan(x_track);
-                tilt(y_track);
-            }
-             if (bt2)
-            {
-                double vPan = Convert.ToDouble(joystick_x / 32.0);// giá trị vPan từ -1 đến 1
-                double vTilt = Convert.ToDouble(joystick_y / 32.0);// giá trị vTilt từ -1 đến 1
+                if (Math.Abs(x_track) > 50) x_track *= 50 / Math.Abs(x_track);
+                if (Math.Abs(y_track) > 50) y_track *= 50 / Math.Abs(y_track);
+                double panControl = x_track/400 + x_target / 6;
+                double tiltControl = -y_track/400 - y_target / 6;
+                pan(panControl);
+                tilt(tiltControl );
+                //ThreadSafe(() => m_Gui.ViewtData(joystick_x, joystick_y, x_track, onTracking, true));
                 
-                pan(vPan / 3.0);
-                tilt(vTilt / 3.0);
             }
-            if (bt7)// track radar
+            if (bt2)
             {
-                if(m_Gui.selectedTargetIndex<m_Gui.ListRadar.Count)
-                {
-                    this.bearing = m_Gui.ListRadar[(m_Gui.selectedTargetIndex)].azi + config.constants[9];
-                    this.range = m_Gui.ListRadar[(m_Gui.selectedTargetIndex)].range * 1.852;
-                    
-                    FolowRadarTarget();
-                    
-                }
-               
+                double vPan = Convert.ToDouble(joystick_x / 64.0);// giá trị vPan từ -1 đến 1
+                double vTilt = Convert.ToDouble(joystick_y / 64.0);// giá trị vTilt từ -1 đến 1
+                pan(vPan * joystick_sensitive);
+                tilt(vTilt * joystick_sensitive);
             }
-            //stabOff();
-             
-        }
-
-        private void FolowRadarTarget()
-        {
             
-            AskAzi(null);
-            if (range == 0) return;
-            byte[] cmd = new byte[8];
-            //set azi ----------------------- 
-            double deltaAzi = bearing - curCamAzi;
-            if (deltaAzi > 180) deltaAzi -= 360;
-            if (deltaAzi < -180) deltaAzi += 360;
-            double panspeed = deltaAzi / 70;
-            if (panspeed > 0.5) panspeed = 0.5;
-            if (panspeed < -0.5) panspeed = -0.5;
-            pan(panspeed);
+            
+            //if (bt7)
+            //{
+            //    if (m_Gui.selectedTargetIndex < m_Gui.ListRadar.Count)
+            //    {
+            //        this.bearing = m_Gui.ListRadar[(m_Gui.selectedTargetIndex)].azi + config.constants[9];
+            //        this.range = m_Gui.ListRadar[(m_Gui.selectedTargetIndex)].range * 1.852;
+            //        double speed = deltaAzi / 70;
+            //        if (speed > 0.5) speed = 0.5;
+            //        if (speed < -0.5) speed = -0.5;
+            //        pan(speed);
+            //    }
+            //}
+            //stabOff();
+
         }
 
+        private void UpdateFocus()
+        {
+            if (isVisCam)
+            {
+                byte a1, a2, a3;
+                a1 = (byte)(focusVis / 100);// chu so hang tram
+                a2 = (byte)((focusVis % 100)/10);// chu so hang chuc
+                a3 = (byte)((focusVis % 10));
+                byte[] cmd = new byte[8];
+                cmd[0] = 0xFF;
+                cmd[1] = 0x00;
+                cmd[2] = 0x08;
+                cmd[3] = 0x77;
+                cmd[4] = (byte)((a1 ) | ((byte)0x10));//Vis focus go to 
+                cmd[5] = (byte)((a2<<4)+a3);
+                cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+                tc.Write(cmd);
+                byte[] dgram;
+                dgram = new byte[2];
+                dgram[0] = 0xfd;
+                dgram[1] = (byte)(focusVis - 900);
+                listener.Send(dgram, 2, "127.0.0.1", 8000);//send focus
+            }
+            else 
+            {
+                byte a1, a2, a3;
+                a1 = (byte)(focusIr / 100);// chu so hang tram
+                a2 = (byte)((focusIr % 100) / 10);// chu so hang chuc
+                a3 = (byte)((focusIr % 10));
+                byte[] cmd = new byte[8];
+                cmd[0] = 0xFF;
+                cmd[1] = 0x00;
+                cmd[2] = 0x08;
+                cmd[3] = 0x77;
+                cmd[4] = (byte)((a1) | ((byte)0x20));//Ir focus go to 
+                cmd[5] = (byte)((a2 << 4) + a3);
+                cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+                tc.Write(cmd);
+                byte[] dgram;
+                dgram = new byte[2];
+                dgram[0] = 0xfd;
+                dgram[1] = (byte)(focusIr);
+                listener.Send(dgram, 2, "127.0.0.1", 8000);//send focus
+            }
+            
+        }
+
+        
         public void Stop()
         {
             //MessageBox.Show("Stop");
@@ -731,7 +1031,7 @@ namespace Camera_PTZ
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
         }
-        public void StopFocus()
+        public void StopFocusIR()
         {
             byte[] cmd = new byte[8];
 
@@ -744,11 +1044,20 @@ namespace Camera_PTZ
             cmd[5] = 0x00;
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
+            cmd[0] = 0xFF;
+            cmd[1] = 0x00;
+            cmd[2] = 0x00;
+            cmd[3] = 0x08;
+            cmd[4] = 0x00;
+            cmd[5] = 0x00;
+            cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+            tc.Write(cmd);
+            
         }
         public void focusINear()
         {
             byte[] cmd = new byte[8];
-            uint rate = (uint)config.constants[4];
+            uint rate = (uint)m_Gui.mConfig.constants[11];
             if (rate > 127) rate = 127;
             cmd[0] = 0xFF;
             cmd[1] = 0x00;
@@ -776,10 +1085,8 @@ namespace Camera_PTZ
         public void panRight()
         {
             byte[] cmd = new byte[8];
-            //set azi ----------------------- 
-            uint rate = (uint)config.constants[5];
-            if (!tinhChinh) rate *= 2;
-            if (rate > 127) rate = 127;
+            uint rate = (uint)(joystick_sensitive * 30.0);
+            if (rate > 63) rate = 63;
             cmd[0] = 0xFF;
             cmd[1] = 0x00;
             cmd[2] = 0x00;
@@ -796,7 +1103,8 @@ namespace Camera_PTZ
             {
                 byte[] cmd = new byte[8];
                 //set rate
-                int irate = Convert.ToInt32(Math.Abs(rate) * 127);
+                int irate = Convert.ToInt32(Math.Abs(rate) * 63);
+                
                 cmd[0] = 0xFF;
                 cmd[1] = 0x00;
                 cmd[2] = 0x00;
@@ -811,7 +1119,8 @@ namespace Camera_PTZ
                 rate = -rate;
                 byte[] cmd = new byte[8];
                 //set rate
-                int irate = Convert.ToInt32(Math.Abs(rate) * 127);
+                int irate = Convert.ToInt32(Math.Abs(rate) * 63);
+                if (irate == 0) irate++;
                 cmd[0] = 0xFF;
                 cmd[1] = 0x00;
                 cmd[2] = 0x00;
@@ -826,9 +1135,8 @@ namespace Camera_PTZ
         {
             byte[] cmd = new byte[8];
             //set azi ----------------------- 
-            uint rate = (uint)config.constants[5];
-            if (!tinhChinh) rate *= 2;
-            if (rate > 127) rate = 127;
+            uint rate = (uint)(joystick_sensitive * 30.0);
+            if (rate > 63) rate = 63;
             cmd[0] = 0xFF;
             cmd[1] = 0x00;
             cmd[2] = 0x00;
@@ -841,7 +1149,7 @@ namespace Camera_PTZ
         public void focusIFar()
         {
             byte[] cmd = new byte[8];
-            uint rate = (uint)config.constants[4];
+            uint rate = (uint)m_Gui.mConfig.constants[11];
             if (rate > 127) rate = 127;
             cmd[0] = 0xFF;
             cmd[1] = 0x00;
@@ -862,6 +1170,19 @@ namespace Camera_PTZ
             cmd[3] = 0x77;
             cmd[4] = 0x06;
             cmd[5] = 0x02;
+            cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+            tc.Write(cmd);
+
+        }
+        public void focusVStop()
+        {
+            byte[] cmd = new byte[8];
+            cmd[0] = 0xFF;
+            cmd[1] = 0x00;
+            cmd[2] = 0x32;
+            cmd[3] = 0x77;
+            cmd[4] = 0x06;
+            cmd[5] = 0x00;
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
 
@@ -904,9 +1225,7 @@ namespace Camera_PTZ
         {
 
             byte[] cmd = new byte[8];
-            //set azi ----------------------- 
-            uint rate = (uint)config.constants[6];
-            if (!tinhChinh) rate *= 2;
+            uint rate = (uint)(joystick_sensitive * 30.0);
             if (rate > 63) rate = 63;
             cmd[0] = 0xFF;
             cmd[1] = 0x00;
@@ -922,9 +1241,9 @@ namespace Camera_PTZ
         {
             byte[] cmd = new byte[8];
             //set azi ----------------------- 
-            uint rate = (uint)config.constants[6];
-            if (!tinhChinh) rate *= 2;
+            uint rate = (uint)(joystick_sensitive * 30.0);
             if (rate > 63) rate = 63;
+
 
             cmd[0] = 0xFF;
             cmd[1] = 0x00;
@@ -941,7 +1260,7 @@ namespace Camera_PTZ
             //zoomVisOut();
             byte[] cmd = new byte[8];
             //set azi ----------------------- 
-            uint rate = (uint)config.constants[4];
+            uint rate = (uint)m_Gui.mConfig.constants[4];
             if (!tinhChinh) rate *= 2;
             if (rate > 63) rate = 63;
 
@@ -954,17 +1273,35 @@ namespace Camera_PTZ
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
         }
-        public void autoFocus()
+        public void autoFocusVis()
         {
-            byte[] cmd = new byte[8];
-            cmd[0] = 0xFF;
-            cmd[1] = 0x00;
-            cmd[2] = 0x24;
-            cmd[3] = 0x77;
-            cmd[4] = 0x0D;
-            cmd[5] = 0x00;
-            cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
-            tc.Write(cmd);
+            
+                
+                    byte[] cmd = new byte[8];
+                    cmd[0] = 0xFF;
+                    cmd[1] = 0x00;
+                    cmd[2] = 0x32;
+                    cmd[3] = 0x77;
+                    cmd[4] = 0x04;
+                    cmd[5] = 0x00;
+                    cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+                    tc.Write(cmd);
+                    
+            
+        }
+        public void autoFocusIr()
+        { 
+            
+                    byte[] cmd = new byte[8];
+                    cmd[0] = 0xFF;
+                    cmd[1] = 0x00;
+                    cmd[2] = 0x24;
+                    cmd[3] = 0x77;
+                    cmd[4] = 0x0D;
+                    cmd[5] = 0x00;
+                    cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+                    tc.Write(cmd);
+                
         }
         public void zoomVisStop()
         {
@@ -982,7 +1319,7 @@ namespace Camera_PTZ
         {
             byte[] cmd = new byte[8];
             //set azi ----------------------- 
-            uint rate = (uint)config.constants[8];
+            uint rate = (uint)m_Gui.mConfig.constants[8];
             //if (!tinhChinh) rate *= 2;
             if (rate > 127) rate = 127;
             //ushort newazi = getAzi();
@@ -994,24 +1331,15 @@ namespace Camera_PTZ
             cmd[5] = 0x00;
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
-            ushort focus = (ushort)config.constants[7];//set standart focus
-            cmd[0] = 0xFF;
-            cmd[1] = 0x00;
-            cmd[2] = 0x08;
-            cmd[3] = 0x77;
-            cmd[4] = (byte)((focus >> 8) | ((byte)0x10));//focus go to min for visible
-            cmd[5] = (byte)(focus);
-            cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
-            tc.Write(cmd);
+            
         }
         public void zoomVisOut()
         {
             byte[] cmd = new byte[8];
             //set azi ----------------------- 
-            double a = config.constants[8];
+            uint a = (uint)m_Gui.mConfig.constants[8];
             //if(!tinhChinh)a*=2;
             uint rate = (uint)(255 - a);
-
             if (rate < 128) rate = 128;
             //ushort newazi = getAzi();
             cmd[0] = 0xFF;
@@ -1022,23 +1350,173 @@ namespace Camera_PTZ
             cmd[5] = 0x00;
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
-            ushort focus = (ushort)config.constants[7];//set standart focus
-            cmd[0] = 0xFF;
-            cmd[1] = 0x00;
-            cmd[2] = 0x08;
-            cmd[3] = 0x77;
-            cmd[4] = (byte)((focus >> 8) | ((byte)0x10));//focus go to min for visual
-            cmd[5] = (byte)(focus);
-            cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
-            tc.Write(cmd);
+            
 
+        }
+        void ZoomActiveIn()
+        {
+            if (isVisCam)
+            {
+                if (zoomFovVis > 0) zoomFovVis--;
+            }
+            else{
+                if (zoomFovIr > 0) zoomFovIr--;
+            }
+            
+            UpdateZoom();
+        }
+        void ZoomActiveOut()
+        {
+            if (isVisCam)
+            {
+                if (zoomFovVis < 16) zoomFovVis++;
+            }
+            else
+            {
+                if (zoomFovIr <8) zoomFovIr++;
+            }
+            
+            UpdateZoom();
+        }
+        void UpdateZoom()
+        {
+            int FOV;
+            if(isVisCam)
+            {
+                switch (zoomFovVis)
+                {
+                    case 0:
+                        focusVis = 957;
+                        FOV = 3;
+                        break;
+                    case 1:
+                        focusVis = 956;
+                        FOV = 5;
+                        break;
+                    case 2:
+                        focusVis = 956;
+                        FOV = 7; break;
+                    case 3:
+                        focusVis = 955;
+                        FOV = 9; break;
+                    case 4:
+                        focusVis = 955;
+                        FOV = 12; break;
+                    case 5:
+                        focusVis = 955;
+                        FOV = 18; break;
+                    case 6:
+                        focusVis = 955;
+                        FOV = 24; break;
+                    case 7:
+                        focusVis = 954;
+                        FOV = 32; break;
+                    case 8:
+                        focusVis = 954;
+                        FOV = 48; break;
+                    case 9:
+                        focusVis = 953;
+                        FOV = 60; break;
+                    case 10:
+                        focusVis = 953;
+                        FOV = 90; break;
+                    case 11:
+                        focusVis = 952;
+                        FOV = 120; break;
+                    case 12:
+                        focusVis = 952;
+                        FOV = 150; break;
+                    case 13:
+                        focusVis = 951;
+                        FOV = 200; break;
+                    case 14:
+                        focusVis = 951;
+                        FOV = 300; break;
+                    case 15:
+                        focusVis = 951;
+                        FOV = 400; break;
+                    case 16:
+                        focusVis = 950;
+                        FOV = 500; break;
+                    default:
+                        return;
+                }
+                byte[] cmd = new byte[8];
+                cmd[0] = 0xFF;
+                cmd[1] = 0x00;
+                cmd[2] = 0x07;
+                cmd[3] = 0x77;
+                cmd[4] = (byte)((FOV >> 8) | (0x70));// Vis camera zoom
+                cmd[5] = (byte)(FOV);
+                cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+                tc.Write(cmd);
+                byte[] dgram;
+                dgram = new byte[3];
+                dgram[0] = 0xfe;
+                dgram[1] = (byte)((50000/FOV)>>8);
+                dgram[2] = (byte)(50000/FOV);
+                listener.Send(dgram, 3, "127.0.0.1", 8000);//send zoom vis
+            }
+            else {
+                switch (zoomFovIr)
+                {
+                    case 0:
+                        focusIr = 93;
+                        FOV = 5;
+                        break;
+                    case 1:
+                        focusIr = 95;
+                        FOV = 7;
+                        break;
+                    case 2:
+                        focusIr = 96;
+                        FOV = 9; break;
+                    case 3:
+                        focusIr = 97;
+                        FOV = 13; break;
+                    case 4:
+                        focusIr = 98;
+                        FOV = 15; break;
+                    case 5:
+                        focusIr = 98;
+                        FOV = 24; break;
+                    case 6:
+                        focusIr = 99;
+                        FOV = 30; break;
+                    case 7:
+                        focusIr = 99;
+                        FOV = 45; break;
+                    case 8:
+                        focusIr = 100;
+                        FOV = 60; break;
+                    default:
+                        return;
+                }
+                byte[] cmd = new byte[8];
+                cmd[0] = 0xFF;
+                cmd[1] = 0x00;
+                cmd[2] = 0x07;
+                cmd[3] = 0x77;
+                cmd[4] = (byte)((FOV >> 8) | (0xB0));// //Ir camera zoom
+                cmd[5] = (byte)(FOV);
+                cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+                tc.Write(cmd);
+                byte[] dgram;
+                dgram = new byte[3];
+                dgram[0] = 0xfe;
+                dgram[1] = (byte)((6000 / FOV)>>8);
+                dgram[2] = (byte)(6000 / FOV);
+                listener.Send(dgram, 3, "127.0.0.1", 8000);//send zoom vis
+            }
+
+            UpdateFocus();
         }
         public void zoomIRIn()//zoom in IR cam
         {
             //zoomVisIn();
             byte[] cmd = new byte[8];
             //set azi ----------------------- 
-            uint rate = (uint)config.constants[4];
+            uint rate = (uint)m_Gui.mConfig.constants[4];
             //if (!tinhChinh) rate *= 2;
             if (rate > 63) rate = 63;
             ushort newazi = getAzi();
@@ -1051,6 +1529,20 @@ namespace Camera_PTZ
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
         }
+        void zoomStep(int a)// gia tri 1 hoac 2
+        {
+            byte[] cmd = new byte[8];
+            ushort newazi = getAzi();
+            cmd[0] = 0xFF;
+            cmd[1] = 0x00;
+            cmd[2] = 0x32;
+            cmd[3] = 0x77;
+            cmd[4] = 0x05;
+            cmd[5] = (byte)(a);
+            cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+            tc.Write(cmd);
+            
+        }
         public void zoomIRStop()//zoom IR cam stop
         {
             //zoomVisIn();
@@ -1059,8 +1551,8 @@ namespace Camera_PTZ
             cmd[0] = 0xFF;
             cmd[1] = 0x00;
             cmd[2] = 0x00;
-            cmd[3] = 0x20;
-            cmd[4] = 0x00;
+            cmd[3] = 0x00;
+            cmd[4] = 0x00;// may be 20 !!!!!!!!!1
             cmd[5] = 0x00;
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
@@ -1068,60 +1560,66 @@ namespace Camera_PTZ
         private ushort getAzi()
         {
 
-            return (ushort)(0xffff * ((bearing) / (360)));
+            return (ushort)(0xffff * ((bearing) / (360.0)));
         }
-        
 
 
-        private ushort getZoomIR()
+
+        private int getZoomIR()
         {
-            uint FOV = (uint)(config.constants[3] / range);//field of view in degree
-            if (FOV > 255) FOV = 255;
-            ushort data = 0;
-            byte carry;
-            carry = (byte)(FOV % 10);
-            data += carry;
-
-            FOV /= 10;
-            carry = (byte)(FOV % 10);
-            data += (ushort)(carry << 4);
-
-            FOV /= 10;
-            carry = (byte)(FOV % 10);
-            data += (ushort)(carry << 8);
-            return data;
+            int FOV = (int)(20.0/range);//60/(range/3)
+            if (FOV < 5) FOV = 5;
+            if (FOV > 60) FOV = 60;
+            if (FOV >= 60) zoomFovIr = 8;
+            else if (FOV >= 45) zoomFovIr = 7;
+            else if (FOV >= 30) zoomFovIr = 6;
+            else if (FOV >= 24) zoomFovIr = 5;
+            else if (FOV >= 15) zoomFovIr = 4;
+            else if (FOV >= 13) zoomFovIr = 3;
+            else if (FOV >= 9) zoomFovIr = 2;
+            else if (FOV >= 7) zoomFovIr = 1;
+            else if (FOV >= 5) zoomFovIr = 0;
+            return FOV;
         }
-        private ushort getZoomVis()
+        private int getZoomVis()
         {
-            uint FOV = (uint)(config.constants[3] / range * 2);//field of view in degree
-            if (FOV > 255) FOV = 255;
-            ushort data = 0;
-            byte carry;
-            carry = (byte)(FOV % 10);
-            data += carry;
-
-            FOV /= 10;
-            carry = (byte)(FOV % 10);
-            data += (ushort)(carry << 4);
-
-            FOV /= 10;
-            carry = (byte)(FOV % 10);
-            data += (ushort)(carry << 8);
-            return data;
+            int FOV = (int)(20.0 / range);//60/(range/3)
+            if (FOV < 3) FOV = 3;
+            if (FOV > 600) FOV = 600;
+            if (FOV >= 600) zoomFovIr = 16;
+            else if (FOV >= 450) zoomFovVis = 15;
+            else if (FOV >= 300) zoomFovVis = 14;
+            else if (FOV >= 200) zoomFovVis = 13;
+            else if (FOV >= 150) zoomFovVis = 12;
+            else if (FOV >= 120) zoomFovVis = 11;
+            else if (FOV >= 90) zoomFovVis = 10;
+            else if (FOV >= 60) zoomFovVis = 9;
+            else if (FOV >= 48) zoomFovVis = 8;
+            else if (FOV >= 32) zoomFovVis = 7;
+            else if (FOV >= 24) zoomFovVis = 6;
+            else if (FOV >= 18) zoomFovVis = 5;
+            else if (FOV >= 12) zoomFovVis = 4;
+            else if (FOV >= 9) zoomFovVis = 3;
+            else if (FOV >= 7) zoomFovVis = 2;
+            else if (FOV >= 5) zoomFovVis = 1;
+            else if (FOV >= 3) zoomFovVis = 0;
+            return FOV;
         }
         private ushort getEL()
         {
 
-            double EL = -Math.Atan(elevation / 1000 / range);
-            double ELcalib = Math.Cos(Math.Abs(bearing - config.constants[1] / 57.2957795)) * config.constants[2] / 57.2957795;
-            EL += ELcalib;// in radian
-            EL += config.constants[0] / 57.2957795;
+            double EL = -Math.Atan(deltaH / 1000 / range);
+            //double ELcalib = Math.Cos(Math.Abs(bearing - config.constants[1] / 57.2957795)) * config.constants[2] / 57.2957795;
+            //EL += ELcalib;// in radian
+            //EL += config.constants[0] / 57.2957795;
             if (EL < 0) EL += 6.283185307;
             return (ushort)(0xffff * (EL / (6.283185307)));
         }
         public void RequestStop()
         {
             _shouldStop = true;
+            mUpdateTimer.Change(Timeout.Infinite, Timeout.Infinite);
+            askAziTimer.Change(Timeout.Infinite,Timeout.Infinite);
         }
         // Volatile is used as hint to the compiler that this data 
         // member will be accessed by multiple threads. 
@@ -1137,22 +1635,50 @@ namespace Camera_PTZ
 
         internal void CamsSelect(bool p)
         {
-            isColorCam = p;
+            isVisCam = p;
+            byte[] cmd = new byte[8];
+            cmd[0] = 0xFF;
+            cmd[1] = 0x00;
+            cmd[2] = 0x0F;
+            cmd[3] = 0x77;
+            cmd[4] = 0x24;
+            if (p)
+            {
+                cmd[4] = 0x00;
+                
+            }
+            else 
+            {
+                cmd[4] = 0x01;
+                
+            }
+            cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+            tc.Write(cmd);
+            //chuyen kenh hinh anh cua anh Thi
+            if (p)
+            {
+                
+                byte[] dgram;
+                dgram = new byte[2];
+                dgram[0] = 0xff;
+                dgram[1] = 0x04;
+                listener.Send(dgram, 2, "127.0.0.1", 8000);
+            }
+            else
+            {
+                
+                byte[] dgram;
+                dgram = new byte[2];
+                dgram[0] = 0xff;
+                dgram[1] = 0x05;
+                listener.Send(dgram, 2, "127.0.0.1", 8000);
+            }
         }
 
         internal void TurnOffCam()
         {
-            byte[] cmd = new byte[8];
-            //set elevation ---------------- 
-            ushort newEL = 0xD554;
-            cmd[0] = 0xFF;
-            cmd[1] = 0x00;
-            cmd[2] = 0x06;
-            cmd[3] = 0x77;
-            cmd[4] = (byte)(newEL >> 8);
-            cmd[5] = (byte)(newEL);
-            cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
-            tc.Write(cmd);
+            tilt(-1.0);
+            
         }
     }
    

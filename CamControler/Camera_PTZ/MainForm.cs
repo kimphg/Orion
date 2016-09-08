@@ -12,6 +12,7 @@ using System.Runtime.InteropServices;
 using System.IO;
 using UsbHid;
 using UsbHid.USB.Classes.Messaging;
+using System.Diagnostics;
 
 namespace Camera_PTZ
 {
@@ -37,8 +38,10 @@ namespace Camera_PTZ
         Thread workerThread;
         //Socket UDPsock;
         cameraType camtype;
+        public Config mConfig;
         public List<arpaOBJ> ListRadar = new List<arpaOBJ>();
         //System.Windows.Forms.Timer getCamStateTimer;
+        
         protected override CreateParams CreateParams
         {
             get
@@ -55,10 +58,11 @@ namespace Camera_PTZ
         {
 
             InitializeComponent();
+            mConfig = new Config();
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.None;
-            
+            Rectangle resolution = Screen.PrimaryScreen.Bounds;
             this.StartPosition = FormStartPosition.Manual;
-            this.Location = new Point(0 ,0 );
+            this.Location = new Point(0,resolution.Height/2 );
             //this.Show();
             //UDPsock = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
             button5.Enabled = true;
@@ -70,11 +74,7 @@ namespace Camera_PTZ
         }
 
 
-        private void button6_Click(object sender, EventArgs e)
-        {
-            if (!connectionActive) return;
-            comandNH.SetValue(Convert.ToDouble(numericUpDown2.Value), Convert.ToDouble(numericUpDown4.Value));
-        }
+        
 
         private void IPtextBox_TextChanged(object sender, EventArgs e)
         {
@@ -110,13 +110,13 @@ namespace Camera_PTZ
                         
                         comandNH = new ControllerNightHawk(tc,this);
                         if (textBox2.Text.Length > 0) tc.Login(textBox2.Text.ToString(), textBox3.Text.ToString(), 100);
-                        button1.Enabled = true;
-                        button2.Enabled = true;
-                        button3.Enabled = true;
-                        button4.Enabled = true;
+                        //button1.Enabled = true;
+                        //button2.Enabled = true;
+                        //button3.Enabled = true;
+                        //button4.Enabled = true;
                         //button5.Enabled = true;
-                        button6.Enabled = true;
-                        button8.Enabled = true;
+                        //button6.Enabled = true;
+                        //button8.Enabled = true;
 
                         button_Connect.Enabled = false;
                         connectionActive = true;
@@ -143,13 +143,13 @@ namespace Camera_PTZ
                         //comandPC = new CommandTransferPelco( this);
                         workerThread = new Thread(comandPC.ListenToCommand);
                         workerThread.Start();
-                        button1.Enabled = true;
-                        button2.Enabled = true;
-                        button3.Enabled = true;
-                        button4.Enabled = true;
+                        //button1.Enabled = true;
+                        //button2.Enabled = true;
+                        //button3.Enabled = true;
+                        //button4.Enabled = true;
                         //button5.Enabled = true;
-                        button6.Enabled = true;
-                        button8.Enabled = true;
+                        //button6.Enabled = true;
+                        //button8.Enabled = true;
                         connectionActive = true;
                         button_Connect.Enabled = false;
                         button_Connect.Text = "Đã kết nối camera";
@@ -225,7 +225,25 @@ namespace Camera_PTZ
         {
             comandNH.Stop();//_ptz.StopMoving();
         }
-
+        public void exitCam()
+        {
+            try
+            {
+                comandNH.RequestStop();
+                workerThread.Abort();
+                comandNH.TurnOffCam();
+                tc.Disconnect();
+                //Process.Start(@"C:\Windows\System32\shutdown.exe /s /t 0");
+                Application.ExitThread();
+                Environment.Exit(0);
+                
+            }
+            catch (Exception e)
+            {
+                return;
+            }
+            
+        }
         private void button5_Click(object sender, EventArgs e)
         {
             //_ptz.SetZoomMagnification(float.Parse(numericUpDownmagnification.Text));
@@ -234,10 +252,8 @@ namespace Camera_PTZ
                 connectionActive = false;
                 if (comandNH != null)
                 {
-                    comandNH.RequestStop();
-                    workerThread.Abort();
-                    comandNH.TurnOffCam();
-                    tc.Disconnect();
+                    exitCam();
+
                 }
                 if (comandPC != null)
                 {
@@ -245,22 +261,23 @@ namespace Camera_PTZ
                     workerThread.Abort();
 
                 }
+                Application.ExitThread();
+                Environment.Exit(0);
                 button5.Text = "Thoát";
                 button_Connect.Text = "Kết nối";
                 button_Connect.Enabled = true;
-                button1.Enabled = false;
-                button2.Enabled = false;
-                button3.Enabled = false;
-                button4.Enabled = false;
-                button6.Enabled = false;
-                button8.Enabled = false;
+                //button1.Enabled = false;
+                //button2.Enabled = false;
+                //button3.Enabled = false;
+                //button4.Enabled = false;
+                //button6.Enabled = false;
+                //button8.Enabled = false;
             }
             else
             {
                 //workerObject.
                 
-                Application.ExitThread();
-                Environment.Exit(0);
+                
                 //timer1.Enabled = false;
             }
         }
@@ -304,29 +321,57 @@ namespace Camera_PTZ
         {
             
         }
-
+        
         private void timer1_Tick(object sender, EventArgs e)
         {
-            if (connectionActive) return;
+
+            if (connectionActive)
+            {
+                if (tc.connectionAborted)
+                {
+                    if (connectionActive)
+                    {
+                        connectionActive = false;
+                        if (comandNH != null)
+                        {
+                            comandNH.RequestStop();
+                            workerThread.Abort();
+                            comandNH.TurnOffCam();
+                            tc.Disconnect();
+                        }
+                        if (comandPC != null)
+                        {
+                            comandPC.RequestStop();
+                            workerThread.Abort();
+
+                        }
+                        button5.Text = "Thoát";
+                        button_Connect.Text = "Kết nối";
+                        button_Connect.Enabled = true;
+                    }
+                    
+                }
+                return;
+            }
             //FF 00 09 77 00 00
             try
             {
 
                 //_ptz = new PTZFacade(IPtextBox.Text.ToString(), textBox2.Text.ToString(), textBox3.Text.ToString());
                 //_ptz.Move(x, y, z);
-                tc = new TelnetConnection(IPtextBox.Text.ToString(), 23);
+                tc = new TelnetConnection(mConfig.ipAdress, 23);
                 comandNH = new ControllerNightHawk(tc, this);
                 if (textBox2.Text.Length > 0) tc.Login(textBox2.Text.ToString(), textBox3.Text.ToString(), 100);
-                button1.Enabled = true;
-                button2.Enabled = true;
-                button3.Enabled = true;
-                button4.Enabled = true;
+                //button1.Enabled = true;
+                //button2.Enabled = true;
+                //button3.Enabled = true;
+                //button4.Enabled = true;
                 //button5.Enabled = true;
-                button6.Enabled = true;
-                button8.Enabled = true;
-
+                //button6.Enabled = true;
+                //button8.Enabled = true;
                 button_Connect.Enabled = false;
                 connectionActive = true;
+                
                 workerThread = new Thread(comandNH.ListenToCommand);
                 workerThread.Start();
                 button_Connect.Text = "Đã kết nối camera";
@@ -435,7 +480,7 @@ namespace Camera_PTZ
 
         internal void targetDown()
         {
-            if (selectedTargetIndex < ListRadar.Count) selectedTargetIndex += 1;
+            if (selectedTargetIndex < ListRadar.Count-1) selectedTargetIndex += 1;
             showTargets();
         }
 
@@ -473,18 +518,59 @@ namespace Camera_PTZ
     public class Config
     {
         public double[] constants;
-
+        public String ipAdress;
+        public String trackerFile;
+        public String WorkingDir;
         public Config()
         {
-            int nparam = 12;
+            int nparam = 20;
             constants = new double[nparam];
+            
+            double[] constantsDefault = new double[nparam];
+            constantsDefault[2] = 0;// chuan phuong bac
+            constantsDefault[3] = 8;//zoomk 
+            constantsDefault[4] = 15;//do nhay zoom IR--
+            constantsDefault[5] = 10;//do nhay pan
+            constantsDefault[6] = 8;//do nhay tilt
+            constantsDefault[7] = 13;//min focus
+            constantsDefault[8] = 15;//do nhay zoom Vissible--
+            constantsDefault[9] = 0;//
+            constantsDefault[10] = 5;//do nhay focus IR--
+
             try
             {
-                StreamReader sr = new StreamReader("cam_comfig.txt");
+                StreamReader sr = new StreamReader(@"C:\Program Files\NHCamera\cam_config.txt");
                 for (int i = 0; i < nparam; i++)
                 {
-                    String[] line = sr.ReadLine().Split(' ');
-                    constants[i] = double.Parse(line[0]);
+                    String str = sr.ReadLine();
+                    // doc cac gia tri config
+                    if (str != null)
+                    {
+                        String[] line = str.Split(';');
+                        if (i == 0)
+                        {
+                            ipAdress = line[0];
+
+                        }
+                        else
+                        if (i == 1)
+                        {
+                            trackerFile = line[0];
+                            String[] strList = trackerFile.Split('\\');
+                            strList[strList.Length - 1] = null;
+                            WorkingDir = string.Join("\\",strList);
+                            
+
+                        }
+                        else if (i > 1)
+                        {
+                            constants[i] = double.Parse(line[0]);
+                        }
+                    }
+                    else
+                    {
+                        constants[i] = constantsDefault[i];
+                    }
                 }
                 
             }
@@ -492,13 +578,15 @@ namespace Camera_PTZ
             {
                 //if (constants[0]==0) constants[0] = 20;//Delta H in metres
                 //1-2 elevation calibrating
-                if (constants[3] == 0) constants[3] = 8;//zoomk 
-                if (constants[4] == 0) constants[4] = 20;//do nhay zoom IR
-                if (constants[5] == 0) constants[5] = 8;//do nhay pan
-                if (constants[6] == 0) constants[6] = 5;//do nhay tilt
-                if (constants[7] == 0) constants[7] = 13;//min focus
-                if (constants[8] == 0) constants[8] = 8;//do nhay zoom Vissible
-                if (constants[9] == 0) constants[9] = 0;//chuan bac camera home 
+                if (ipAdress==null) ipAdress = "192.168.150.92";
+                if (trackerFile == null) trackerFile = "C:\\Program Files\\NHCamera\\TrackCam.exe";
+                String[] strList = trackerFile.Split('\\');
+                strList[strList.Length - 1] = null;
+                WorkingDir = strList.ToString();
+                for (int i = 0; i < nparam; i++)
+                {
+                    constants[i] = constantsDefault[i];
+                }
                 //MessageBox.Show(e.Message);2
             }
         }
@@ -508,7 +596,6 @@ namespace Camera_PTZ
     {
         public volatile bool tinhChinh = true;
         int cx, cy;
-        int zoom;
         int fineMove;
         bool bt1, bt2, bt3, bt4, bt5, bt6, bt12;
         public volatile Config config;

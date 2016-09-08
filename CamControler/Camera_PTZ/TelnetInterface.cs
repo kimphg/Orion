@@ -59,13 +59,22 @@ namespace Camera_PTZ
         {
             Write(cmd + "\n");
         }
-
+        public bool connectionAborted = false;
+        
         public void Write(byte[] cmd)
         {
             if (!tcpSocket.Connected) return;
                         
             //byte[] buf = //System.Text.ASCIIEncoding.ASCII.GetBytes(cmd.Replace("\0xFF","\0xFF\0xFF"));
-            tcpSocket.GetStream().Write(cmd, 0, cmd.Length);
+            try { 
+                tcpSocket.GetStream().Write(cmd, 0, cmd.Length);
+               
+            }
+            catch (Exception e)
+            {
+                connectionAborted = true;
+                return;
+            }
         }
         public void Write(string cmd)
         {
