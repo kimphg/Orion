@@ -49,7 +49,7 @@
             // 
             // IPtextBox
             // 
-            this.IPtextBox.Location = new System.Drawing.Point(109, 17);
+            this.IPtextBox.Location = new System.Drawing.Point(305, 46);
             this.IPtextBox.Margin = new System.Windows.Forms.Padding(2);
             this.IPtextBox.Name = "IPtextBox";
             this.IPtextBox.Size = new System.Drawing.Size(98, 20);
@@ -78,7 +78,7 @@
             // label1
             // 
             this.label1.AutoSize = true;
-            this.label1.Location = new System.Drawing.Point(11, 20);
+            this.label1.Location = new System.Drawing.Point(211, 49);
             this.label1.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
             this.label1.Name = "label1";
             this.label1.Size = new System.Drawing.Size(78, 13);
@@ -178,7 +178,7 @@
             this.listBox1.Font = new System.Drawing.Font("Microsoft Sans Serif", 14F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.listBox1.FormattingEnabled = true;
             this.listBox1.ItemHeight = 24;
-            this.listBox1.Location = new System.Drawing.Point(12, 20);
+            this.listBox1.Location = new System.Drawing.Point(12, 12);
             this.listBox1.Name = "listBox1";
             this.listBox1.Size = new System.Drawing.Size(391, 268);
             this.listBox1.TabIndex = 27;

@@ -451,7 +451,7 @@ namespace Camera_PTZ
             if (bt12 != newbt12)
             {
                 bt12 = newbt12;
-                if (bt12&bt11)// ẩn/hiện giao diện hiển thị
+                if (bt12&bt11)// 
                 {
                     toggleStab();
                 }
