@@ -21,9 +21,9 @@ namespace Camera_PTZ
         IPEndPoint groupEP;
         // các biến trạng thái cua joystick
         public UsbHidDevice pDevice;
-        bool bt1 = false, bt2 = false, bt3 = false,
-             bt4 = false, bt5 = false, bt6 = false,
-             bt7 = false, bt8 = false, bt9 = false,
+        bool  bt1 = false, bt2 = false, bt3 = false,
+              bt4 = false, bt5 = false, bt6 = false,
+              bt7 = false, bt8 = false, bt9 = false,
              bt10 = false, bt11 = false, bt12 = false;
         int joystick_x, joystick_y;
         int focusIr = 95;// tu 0 den 100
@@ -670,7 +670,7 @@ namespace Camera_PTZ
         
         private void initCommand()
         {
-            restartTracker();
+            //restartTracker();
             UpdateZoom();
             UpdateFocus();
             CamsSelect(true);// chon camera Vis
@@ -725,17 +725,19 @@ namespace Camera_PTZ
         private bool teleMul = false;
         private bool stabilizOn = false;
         private bool isRecording = false;
+        
+        
         public void ListenToCommand()
         {
             _shouldStop = false;
-
-
+            
             while (!_shouldStop)
             {
                 try
                 {
+
                     byte[] receive_byte_array = listener.Receive(ref groupEP);
-                    string received_data = Encoding.ASCII.GetString(receive_byte_array, 0, receive_byte_array.Length);
+                    
                     if (receive_byte_array[0] == 0xff)
                         errCount = 0;
                     if (receive_byte_array[0] == 0xff && receive_byte_array.Length == 5)//nhan du lieu bam tu anh Thi
@@ -791,8 +793,15 @@ namespace Camera_PTZ
 
                         }
                     }
+                    for (int i = 0; i < receive_byte_array.Length; i++)
+                    {
+                        if ((receive_byte_array[i] < Convert.ToByte(' ')) || (receive_byte_array[i] > Convert.ToByte('~')))
+                        {
+                            receive_byte_array[i] = Convert.ToByte(',');
+                        }
+                    }
+                    string received_data = Encoding.ASCII.GetString(receive_byte_array, 0, receive_byte_array.Length);
                     string[] strList = received_data.Split(',');
-
                     for (int i = 0; i < strList.Length - 4; i++)
                     {
                         if ((strList[i] == "$RATTM"))//radar
@@ -1260,7 +1269,7 @@ namespace Camera_PTZ
             //zoomVisOut();
             byte[] cmd = new byte[8];
             //set azi ----------------------- 
-            uint rate = (uint)m_Gui.mConfig.constants[4];
+            uint rate = 15;//(uint)m_Gui.mConfig.constants[4];
             if (!tinhChinh) rate *= 2;
             if (rate > 63) rate = 63;
 
@@ -1516,7 +1525,7 @@ namespace Camera_PTZ
             //zoomVisIn();
             byte[] cmd = new byte[8];
             //set azi ----------------------- 
-            uint rate = (uint)m_Gui.mConfig.constants[4];
+            uint rate = 15;//(uint)m_Gui.mConfig.constants[4];
             //if (!tinhChinh) rate *= 2;
             if (rate > 63) rate = 63;
             ushort newazi = getAzi();

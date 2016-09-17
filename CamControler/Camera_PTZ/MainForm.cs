@@ -54,12 +54,13 @@ namespace Camera_PTZ
         //private static PTZFacade _ptz;
         private const uint PRESET_PATTERN = 8;
         TelnetConnection tc;
+        UdpClient radarDatalisten;
         public GuiMain()
         {
-
+           
             InitializeComponent();
             mConfig = new Config();
-            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.None;
+            //this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.None;
             Rectangle resolution = Screen.PrimaryScreen.Bounds;
             this.StartPosition = FormStartPosition.Manual;
             this.Location = new Point(0,resolution.Height/2 );
@@ -70,12 +71,32 @@ namespace Camera_PTZ
             TopLevel = true;
             TopMost = true;
             connectionActive = false;
+            radarDatalisten = new UdpClient((int)mConfig.constants[4]);
+            radarDatalisten.BeginReceive(Receive, new object());
             //sending_socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
         }
-
-
-        
-
+        int radarCount = 5;
+        private void Receive(IAsyncResult ar)
+        {
+            radarCount = 5;
+            IPEndPoint ip = new IPEndPoint(IPAddress.Any, (int)mConfig.constants[4]);
+            byte[] receive_byte_array = radarDatalisten.Receive(ref ip);
+            for (int i = 0; i < receive_byte_array.Length; i++)
+            {
+                if ((receive_byte_array[i] < Convert.ToByte(' ')) || (receive_byte_array[i] > Convert.ToByte('~')))
+                {
+                    receive_byte_array[i] = Convert.ToByte(',');
+                }
+            }
+            string received_data = Encoding.ASCII.GetString(receive_byte_array, 0, receive_byte_array.Length);
+            string[] strList = received_data.Split(',');
+            for (int i = 0; i < strList.Length - 4; i++)
+            {
+                addARPA(strList);
+                //strList.(0);
+            }
+            radarDatalisten.BeginReceive(Receive, new object());
+        }
         private void IPtextBox_TextChanged(object sender, EventArgs e)
         {
 
@@ -92,84 +113,7 @@ namespace Camera_PTZ
 
         }
 
-        private void button_Connect_Click(object sender, EventArgs e)
-        {
-
-            button_Connect.Text = "Đang kết nối...";
-            Update();
-            //Update();
-            switch (camtype)
-            {
-                case cameraType.nighthawk:
-                    try
-                    {
-
-                        //_ptz = new PTZFacade(IPtextBox.Text.ToString(), textBox2.Text.ToString(), textBox3.Text.ToString());
-                        //_ptz.Move(x, y, z);
-                        tc = new TelnetConnection(IPtextBox.Text.ToString(), 23);
-                        
-                        comandNH = new ControllerNightHawk(tc,this);
-                        if (textBox2.Text.Length > 0) tc.Login(textBox2.Text.ToString(), textBox3.Text.ToString(), 100);
-                        //button1.Enabled = true;
-                        //button2.Enabled = true;
-                        //button3.Enabled = true;
-                        //button4.Enabled = true;
-                        //button5.Enabled = true;
-                        //button6.Enabled = true;
-                        //button8.Enabled = true;
-
-                        button_Connect.Enabled = false;
-                        connectionActive = true;
-                        workerThread = new Thread(comandNH.ListenToCommand);
-                        workerThread.Start();
-                        button_Connect.Text = "Đã kết nối camera";
-                        button5.Text = "Ngắt kết nối";
-                        Update();
-                    }
-                    catch (Exception ex)
-                    {
-                        button_Connect.Text = "Kết nối thất bại, thử lại?";
-                        MessageBox.Show("Không tìm thấy camera tại địa chỉ đã chọn.");
-
-                        return;
-                    }
-                    break;
-                case cameraType.pelco:
-                    try
-                    {
-                        PTZFacade ptz;
-                        ptz = new PTZFacade(IPtextBox.Text, "admin", "admin");
-                        comandPC = new CommandTransferPelco(ptz, this);
-                        //comandPC = new CommandTransferPelco( this);
-                        workerThread = new Thread(comandPC.ListenToCommand);
-                        workerThread.Start();
-                        //button1.Enabled = true;
-                        //button2.Enabled = true;
-                        //button3.Enabled = true;
-                        //button4.Enabled = true;
-                        //button5.Enabled = true;
-                        //button6.Enabled = true;
-                        //button8.Enabled = true;
-                        connectionActive = true;
-                        button_Connect.Enabled = false;
-                        button_Connect.Text = "Đã kết nối camera";
-                        button5.Text = "Ngắt kết nối";
-                        Update();
-                        break;
-                    }
-                    catch (Exception ex)
-                    {
-                        button_Connect.Text = "Kết nối thất bại, thử lại?";
-                        MessageBox.Show(ex.ToString());
-
-                        return;
-                    }
-                default:
-                    break;
-            }
-            
-            
-        }
+        
         private ControllerNightHawk comandNH;
         private CommandTransferPelco comandPC;
         private void PtzControl_Load(object sender, EventArgs e)
@@ -264,8 +208,7 @@ namespace Camera_PTZ
                 Application.ExitThread();
                 Environment.Exit(0);
                 button5.Text = "Thoát";
-                button_Connect.Text = "Kết nối";
-                button_Connect.Enabled = true;
+
                 //button1.Enabled = false;
                 //button2.Enabled = false;
                 //button3.Enabled = false;
@@ -326,6 +269,15 @@ namespace Camera_PTZ
         int failedconnectionCount = 0;
         private void timer1_Tick(object sender, EventArgs e)
         {
+            if(radarCount>0)radarCount--;
+            if(radarCount==0)
+            {
+                label_radar_stat.Text = "Chưa kết nối radar";
+            }
+            else {
+                label_radar_stat.Text = "Đã kết nối radar";
+            }
+            showTargets();
             if (isWaitingForConnect) return;
             BackgroundWorker bw = new BackgroundWorker();
             // this allows our worker to report progress during work
@@ -359,9 +311,6 @@ namespace Camera_PTZ
                     isWaitingForConnect = true;
                     tc = new TelnetConnection(mConfig.ipAdress, 23);
                     comandNH = new ControllerNightHawk(tc, this);
-                    if (textBox2.Text.Length > 0)
-                        tc.Login(textBox2.Text.ToString(), textBox3.Text.ToString(), 100);
-                    button_Connect.Enabled = false;
                     connectionActive = true;
                     workerThread = new Thread(comandNH.ListenToCommand);
                     workerThread.Start();
@@ -419,22 +368,7 @@ namespace Camera_PTZ
 
         }
 
-        private void comboBox1_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            if (comboBox1.Text == "Pelco")
-            {
-                camtype = cameraType.pelco;
-            }
-            if (comboBox1.Text == "Night Hawk")
-            {
-                camtype = cameraType.nighthawk;
-            }
-            if (comboBox1.Text == "Flir")
-            {
-                camtype = cameraType.flir;
-            }
-        }
-
+        
         private void timerPelcoCommand_Tick(object sender, EventArgs e)
         {
             if (comandPC!=null)
@@ -471,7 +405,7 @@ namespace Camera_PTZ
                     {
                         ListRadar.Add(newobj);
                     }
-                    showTargets();
+                    
                 }
             }
             
@@ -480,18 +414,28 @@ namespace Camera_PTZ
 
         private void showTargets()
         {
-            listBox1.Items.Clear();
+            listBox1.Invoke( (MethodInvoker)delegate ()
+            {
+                listBox1.Items.Clear();
+            });
+            
             for (int i = 0; i < ListRadar.Count; i++)
             {
                 String ss;
 
-                ss = "Muc tieu:" + ListRadar[i].id + " ||Cu ly:" + ListRadar[i].range + " ||Phuong vi:" + ListRadar[i].azi;
+                ss = "MT số:" + ListRadar[i].id + " ||Cự ly:" + ListRadar[i].range + " ||P.vị:" + ListRadar[i].azi;
+                listBox1.Invoke((MethodInvoker)delegate()
+                {
+                    listBox1.Items.Add(ss);
+                });
                 
-                listBox1.Items.Add(ss);
                 if (selectedTargetIndex == i)
                 {
-
-                    listBox1.SetSelected(i, true);
+                    listBox1.Invoke((MethodInvoker)delegate()
+                    {
+                        listBox1.SetSelected(i, true);
+                    });
+                    
                 }
 
             }
@@ -540,6 +484,29 @@ namespace Camera_PTZ
         {
             
         }
+
+        private void button_add_target_Click(object sender, EventArgs e)
+        {
+            arpaOBJ newobj;
+            newobj.id = textBox_t_num.Text;
+            float.TryParse(textBox_t_range.Text, out newobj.range);
+            newobj.range /= 1.852f;
+            float.TryParse(textBox_t_bearing.Text, out newobj.azi);
+            bool newdata = true;
+            for (int j = 0; j < ListRadar.Count; j++)
+            {
+                if (ListRadar[j].id == newobj.id)
+                {
+                    ListRadar[j] = newobj;
+                    newdata = false; break;
+                }
+            }
+
+            if (newdata)
+            {
+                ListRadar.Add(newobj);
+            }
+        }
     }
     public class Config
     {
@@ -555,7 +522,7 @@ namespace Camera_PTZ
             double[] constantsDefault = new double[nparam];
             constantsDefault[2] = 0;// chuan phuong bac
             constantsDefault[3] = 8;//zoomk 
-            constantsDefault[4] = 15;//do nhay zoom IR--
+            constantsDefault[4] = 2917;//cong du lieu radar
             constantsDefault[5] = 10;//do nhay pan
             constantsDefault[6] = 8;//do nhay tilt
             constantsDefault[7] = 13;//min focus
