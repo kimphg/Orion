@@ -75,7 +75,7 @@ namespace Camera_PTZ
             radarDatalisten.BeginReceive(Receive, new object());
             //sending_socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
         }
-        int radarCount = 5;
+        int radarCount = 0;
         private void Receive(IAsyncResult ar)
         {
             radarCount = 5;
@@ -388,9 +388,9 @@ namespace Camera_PTZ
                 if (strList[i] == "$RATTM")
                 {
                     arpaOBJ newobj;
-                    newobj.id = strList[1];
-                    float.TryParse(strList[2], out newobj.range);
-                    float.TryParse(strList[3], out newobj.azi);
+                    newobj.id = strList[i+1];
+                    float.TryParse(strList[i+2], out newobj.range);
+                    float.TryParse(strList[i+3], out newobj.azi);
                     bool newdata = true;
                     for (int j = 0; j < ListRadar.Count; j++)
                     {

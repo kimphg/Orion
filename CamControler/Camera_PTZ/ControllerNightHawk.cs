@@ -227,7 +227,7 @@ namespace Camera_PTZ
             //set focus FF 00 08 77 ax xx---------------- 
             setStandartFocus();
             Thread.Sleep(2000);
-            stabOff();
+            //stabOff();
             Stop();
         }
 
@@ -553,12 +553,12 @@ namespace Camera_PTZ
         {
             if (stabilizOn)
             {
-                stabilizOn = false;
+                
                 stabOff();
             }
             else 
             {
-                stabilizOn = true;
+                
                 stabOn();
             }
         }
@@ -674,8 +674,8 @@ namespace Camera_PTZ
             UpdateZoom();
             UpdateFocus();
             CamsSelect(true);// chon camera Vis
-            stabOff();
-            //stabOn();
+            //stabOff();
+            stabOn();
             ThreadSafe(() => m_Gui.HideToTray());
             dialoghidden = true;
             
@@ -683,6 +683,7 @@ namespace Camera_PTZ
         }
         private void stabOn()
         {
+            stabilizOn = true;
             byte[] cmd = new byte[8];
             //PA: B2 A5 E6 93
             cmd[0] = 0xFF;
@@ -696,6 +697,7 @@ namespace Camera_PTZ
         }
         private void stabOff()
         {
+            stabilizOn = false;
             byte[] cmd = new byte[8];
             //PA: B2 A5 E6 93
             cmd[0] = 0xFF;
