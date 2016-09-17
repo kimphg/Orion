@@ -1618,8 +1618,8 @@ namespace Camera_PTZ
         }
         private ushort getEL()
         {
-
             double EL = -Math.Atan(deltaH / 1000 / range);
+            EL += m_Gui.mConfig.constants[3] / 360.0 * 6.283185307;
             //double ELcalib = Math.Cos(Math.Abs(bearing - config.constants[1] / 57.2957795)) * config.constants[2] / 57.2957795;
             //EL += ELcalib;// in radian
             //EL += config.constants[0] / 57.2957795;

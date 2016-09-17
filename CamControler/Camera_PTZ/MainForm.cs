@@ -490,7 +490,6 @@ namespace Camera_PTZ
             arpaOBJ newobj;
             newobj.id = textBox_t_num.Text;
             float.TryParse(textBox_t_range.Text, out newobj.range);
-            newobj.range /= 1.852f;
             float.TryParse(textBox_t_bearing.Text, out newobj.azi);
             bool newdata = true;
             for (int j = 0; j < ListRadar.Count; j++)
@@ -521,7 +520,7 @@ namespace Camera_PTZ
             
             double[] constantsDefault = new double[nparam];
             constantsDefault[2] = 0;// chuan phuong bac
-            constantsDefault[3] = 8;//zoomk 
+            constantsDefault[3] = 0;// hieu chinh goc ta` 
             constantsDefault[4] = 2917;//cong du lieu radar
             constantsDefault[5] = 10;//do nhay pan
             constantsDefault[6] = 8;//do nhay tilt
