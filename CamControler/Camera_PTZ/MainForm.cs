@@ -29,6 +29,8 @@ namespace Camera_PTZ
         }*/
         public float range;
         public float azi;
+        public double  life;
+        public bool isManual;
     };
     enum cameraType { pelco, nighthawk, flir } ;
     public partial class GuiMain : Form
@@ -41,7 +43,12 @@ namespace Camera_PTZ
         public Config mConfig;
         public List<arpaOBJ> ListRadar = new List<arpaOBJ>();
         //System.Windows.Forms.Timer getCamStateTimer;
-        
+        public  double GetTimeSec()
+        {
+            DateTime origin = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
+            TimeSpan diff = DateTime.Now.ToUniversalTime() - origin;
+            return Math.Floor(diff.TotalSeconds);
+        }
         protected override CreateParams CreateParams
         {
             get
@@ -71,8 +78,15 @@ namespace Camera_PTZ
             TopLevel = true;
             TopMost = true;
             connectionActive = false;
-            radarDatalisten = new UdpClient((int)mConfig.constants[4]);
-            radarDatalisten.BeginReceive(Receive, new object());
+            try {
+                radarDatalisten = new UdpClient((int)mConfig.constants[4]);
+                radarDatalisten.BeginReceive(Receive, new object());
+            }
+            catch(Exception e)
+            {
+                Environment.Exit(0);
+            }
+            
             //sending_socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
         }
         int radarCount = 0;
@@ -388,6 +402,8 @@ namespace Camera_PTZ
                 if (strList[i] == "$RATTM")
                 {
                     arpaOBJ newobj;
+                    newobj.isManual = false;
+                    newobj.life = GetTimeSec();
                     newobj.id = strList[i+1];
                     float.TryParse(strList[i+2], out newobj.range);
                     float.TryParse(strList[i+3], out newobj.azi);
@@ -422,6 +438,21 @@ namespace Camera_PTZ
             for (int i = 0; i < ListRadar.Count; i++)
             {
                 String ss;
+                if (ListRadar[i].isManual)
+                {
+                    if (GetTimeSec() - ListRadar[i].life > 300)
+                    {
+                        ListRadar.RemoveAt(i);
+                        if (selectedTargetIndex >= ListRadar.Count) selectedTargetIndex--;
+                        i--; continue;
+                    }
+                }
+                else if (GetTimeSec() - ListRadar[i].life > 60)
+                {
+                    ListRadar.RemoveAt(i);
+                    if (selectedTargetIndex >= ListRadar.Count) selectedTargetIndex--;
+                    i--; continue;
+                }
 
                 ss = "MT số:" + ListRadar[i].id + " ||Cự ly:" + ListRadar[i].range + " ||P.vị:" + ListRadar[i].azi;
                 listBox1.Invoke((MethodInvoker)delegate()
@@ -444,17 +475,18 @@ namespace Camera_PTZ
 
         internal void targetUp()
         {
-            if(selectedTargetIndex>0)selectedTargetIndex -= 1;
+            if(selectedTargetIndex>0)selectedTargetIndex --;
             showTargets();
         }
 
         internal void targetDown()
         {
-            if (selectedTargetIndex < ListRadar.Count-1) selectedTargetIndex += 1;
+            selectedTargetIndex++;
+            if (selectedTargetIndex >= ListRadar.Count) selectedTargetIndex = ListRadar.Count-1;
             showTargets();
         }
 
-        public int selectedTargetIndex { get; set; }
+        public int selectedTargetIndex = 0;
 
         internal void ShowOpTop()
         {
@@ -488,6 +520,8 @@ namespace Camera_PTZ
         private void button_add_target_Click(object sender, EventArgs e)
         {
             arpaOBJ newobj;
+            newobj.isManual = true;
+            newobj.life = GetTimeSec();
             newobj.id = textBox_t_num.Text;
             float.TryParse(textBox_t_range.Text, out newobj.range);
             float.TryParse(textBox_t_bearing.Text, out newobj.azi);
@@ -505,6 +539,16 @@ namespace Camera_PTZ
             {
                 ListRadar.Add(newobj);
             }
+        }
+
+        private void button1_Click_1(object sender, EventArgs e)
+        {
+            targetUp();
+        }
+
+        private void button2_Click_1(object sender, EventArgs e)
+        {
+            targetDown();
         }
     }
     public class Config
