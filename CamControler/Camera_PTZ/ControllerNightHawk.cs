@@ -1578,7 +1578,7 @@ namespace Camera_PTZ
 
         private int getZoomIR()
         {
-            int FOV = (int)(20.0/range);//60/(range/3)
+            int FOV = (int)(m_Gui.mConfig.constants[5] / range);//60/(range/3)
             if (FOV < 5) FOV = 5;
             if (FOV > 60) FOV = 60;
             if (FOV >= 60) zoomFovIr = 8;
@@ -1594,7 +1594,7 @@ namespace Camera_PTZ
         }
         private int getZoomVis()
         {
-            int FOV = (int)(20.0 / range);//60/(range/3)
+            int FOV = (int)(m_Gui.mConfig.constants[5] / range);//60/(range/3)
             if (FOV < 3) FOV = 3;
             if (FOV > 600) FOV = 600;
             if (FOV >= 600) zoomFovIr = 16;

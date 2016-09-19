@@ -63,7 +63,11 @@ namespace Camera_PTZ
         
         public void Write(byte[] cmd)
         {
-            if (!tcpSocket.Connected) return;
+            if (!tcpSocket.Connected)
+            {
+                
+                return;
+            }
                         
             //byte[] buf = //System.Text.ASCIIEncoding.ASCII.GetBytes(cmd.Replace("\0xFF","\0xFF\0xFF"));
             try { 

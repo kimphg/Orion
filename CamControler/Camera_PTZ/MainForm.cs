@@ -67,7 +67,7 @@ namespace Camera_PTZ
            
             InitializeComponent();
             mConfig = new Config();
-            //this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.None;
+            //this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
             Rectangle resolution = Screen.PrimaryScreen.Bounds;
             this.StartPosition = FormStartPosition.Manual;
             this.Location = new Point(0,resolution.Height/2 );
@@ -310,10 +310,9 @@ namespace Camera_PTZ
                         {
                             comandNH.RequestStop();
                             workerThread.Abort();
-                            
                             tc.Disconnect();
+                            tc.connectionAborted = false;
                         }
-
                     }
                     return;
                 }
@@ -324,6 +323,7 @@ namespace Camera_PTZ
                     //_ptz.Move(x, y, z);
                     isWaitingForConnect = true;
                     tc = new TelnetConnection(mConfig.ipAdress, 23);
+                    
                     comandNH = new ControllerNightHawk(tc, this);
                     connectionActive = true;
                     workerThread = new Thread(comandNH.ListenToCommand);
@@ -566,12 +566,13 @@ namespace Camera_PTZ
             constantsDefault[2] = 0;// chuan phuong bac
             constantsDefault[3] = 0;// hieu chinh goc ta` 
             constantsDefault[4] = 2917;//cong du lieu radar
-            constantsDefault[5] = 10;//do nhay pan
+            constantsDefault[5] = 100.0;//he so zoom
             constantsDefault[6] = 8;//do nhay tilt
             constantsDefault[7] = 13;//min focus
             constantsDefault[8] = 15;//do nhay zoom Vissible--
             constantsDefault[9] = 0;//
             constantsDefault[10] = 5;//do nhay focus IR--
+
 
             try
             {
@@ -621,7 +622,7 @@ namespace Camera_PTZ
                 WorkingDir = strList.ToString();
                 for (int i = 0; i < nparam; i++)
                 {
-                    constants[i] = constantsDefault[i];
+                    if (constants[i] == null) constants[i] = constantsDefault[i];
                 }
                 //MessageBox.Show(e.Message);2
             }
