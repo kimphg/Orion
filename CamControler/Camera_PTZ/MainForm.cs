@@ -506,7 +506,15 @@ namespace Camera_PTZ
         {
             textBox1.Text = "X:"+cx.ToString() + "|Y:" +"|Azi:"+azi.ToString("0.0") + cy.ToString() + "|Track:" + onTracking.ToString() + "|Connected:" + isconnected.ToString();
         }
-
+        public void ViewtData(bool isStab,bool onTracking, bool is2x,bool antiFog,bool mitigation)
+        {
+            String str = "|";
+            if (isStab) str += "Tự ổn định|";
+            if (onTracking) str += "Bám MT|";
+            if (is2x) str += "2x Zoom|";
+            if (antiFog) str += "Lọc mù|";
+            if (mitigation) str += "Tăng nhạy nhiệt|";
+        }
         public void  GotoSelectedTarget()
         {
             

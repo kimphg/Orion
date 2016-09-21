@@ -963,7 +963,7 @@ namespace Camera_PTZ
                 pan(vPan * joystick_sensitive);
                 tilt(vTilt * joystick_sensitive);
             }
-            
+            ThreadSafe(() => m_Gui.ViewtData(stabilizOn,onTracking,teleMul,fogFilter,turboLence));
             
             //if (bt7)
             //{
