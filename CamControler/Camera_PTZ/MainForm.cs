@@ -192,14 +192,16 @@ namespace Camera_PTZ
                 comandNH.TurnOffCam();
                 tc.Disconnect();
                 //Process.Start(@"C:\Windows\System32\shutdown.exe /s /t 0");
-                Application.ExitThread();
-                Environment.Exit(0);
+                
                 
             }
             catch (Exception e)
             {
-                return;
+                Application.ExitThread();
+                Environment.Exit(0);
             }
+            Application.ExitThread();
+            Environment.Exit(0);
             
         }
         private void button5_Click(object sender, EventArgs e)
@@ -279,7 +281,7 @@ namespace Camera_PTZ
         {
             
         }
-        bool isWaitingForConnect = false;
+        
         int failedconnectionCount = 0;
         private void timer1_Tick(object sender, EventArgs e)
         {
@@ -292,51 +294,44 @@ namespace Camera_PTZ
                 label_radar_stat.Text = "Đã kết nối radar";
             }
             showTargets();
-            if (isWaitingForConnect) return;
+            
+            if (connectionActive)
+            {
+                if (tc.connectionAborted||(!tc.IsConnected))
+                {
+                    connectionActive = false;
+                    if (comandNH != null)
+                    {
+                        comandNH.RequestStop();
+                        workerThread.Abort();
+                        tc.Disconnect();
+                        tc.connectionAborted = false;
+                    }
+                }
+                return;
+            }
             BackgroundWorker bw = new BackgroundWorker();
-            // this allows our worker to report progress during work
-            //bw.WorkerReportsProgress = true;
             // what to do in the background thread
             bw.DoWork += new DoWorkEventHandler(
             delegate(object o, DoWorkEventArgs args)
             {
-
-                if (connectionActive)
-                {
-                    if (tc.connectionAborted)
-                    {
-                        connectionActive = false;
-                        if (comandNH != null)
-                        {
-                            comandNH.RequestStop();
-                            workerThread.Abort();
-                            tc.Disconnect();
-                            tc.connectionAborted = false;
-                        }
-                    }
-                    return;
-                }
                 try
                 {
-
-                    //_ptz = new PTZFacade(IPtextBox.Text.ToString(), textBox2.Text.ToString(), textBox3.Text.ToString());
-                    //_ptz.Move(x, y, z);
-                    isWaitingForConnect = true;
-                    tc = new TelnetConnection(mConfig.ipAdress, 23);
                     
-                    comandNH = new ControllerNightHawk(tc, this);
-                    connectionActive = true;
-                    workerThread = new Thread(comandNH.ListenToCommand);
-                    workerThread.Start();
-                    //button_Connect.Text = "Đã kết nối camera";
-                    //button5.Text = "Ngắt kết nối";
-                    Update();
+                    tc = new TelnetConnection(mConfig.ipAdress, 23);
+                    if(tc.IsConnected)
+                    {
+                        comandNH = new ControllerNightHawk(tc, this);
+                        workerThread = new Thread(comandNH.ListenToCommand);
+                        workerThread.Start();
+                        connectionActive = true;
+                    }
+                    
+                    
                 }
                 catch (Exception ex)
                 {
-                    //button_Connect.Text = "Kết nối thất bại, thử lại?";
-                    //MessageBox.Show("Không tìm thấy camera tại địa chỉ đã chọn.");
-                    
+
                     return;
                 }
             });
@@ -356,13 +351,13 @@ namespace Camera_PTZ
                 { 
                     this.textBox1.Text = "Đã kết nối camera";
                     failedconnectionCount=0;
-                    isWaitingForConnect = false;
+                    
                 }
                 else
                 {
                     failedconnectionCount++;
                     this.textBox1.Text = "Không thể kết nối đến camera."+failedconnectionCount.ToString();
-                    isWaitingForConnect = false;
+                    
                 }
                     
             });

@@ -191,6 +191,10 @@ namespace Camera_PTZ
             cmd[5] = (byte)(newazi);
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
+
+            Thread.Sleep(2000);
+            Stop();
+            setStandartFocus();
             Thread.Sleep(300);
             //set elevation ---------------- 
             ushort newEL = getEL();
@@ -204,31 +208,28 @@ namespace Camera_PTZ
             tc.Write(cmd);
             Thread.Sleep(300);
             //set zoom  goto FF 00 07 77 ax xx---------------- 
-            int newZoom = getZoomIR();//IR camera zoom
+            int fov = getZoomIR();//IR camera zoom
             cmd[0] = 0xFF;
             cmd[1] = 0x00;
             cmd[2] = 0x07;
             cmd[3] = 0x77;
-            cmd[4] = (byte)((newZoom >> 8) | (0xB0));// //IR camera zoom
-            cmd[5] = (byte)(newZoom);
+            cmd[4] = (byte)((fov >> 8) | (0xB0));// //IR camera zoom
+            cmd[5] = (byte)(fov);
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
             Thread.Sleep(300);
             //Vis camera zoom
-            newZoom = getZoomVis();
+            fov = getZoomVis();
             cmd[0] = 0xFF;
             cmd[1] = 0x00;
             cmd[2] = 0x07;
             cmd[3] = 0x77;
-            cmd[4] = (byte)((newZoom >> 8) | (0x70));// //VIS camera zoom
-            cmd[5] = (byte)(newZoom);
+            cmd[4] = (byte)((fov >> 8) | (0x70));// //VIS camera zoom
+            cmd[5] = (byte)(fov);
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
-            //set focus FF 00 08 77 ax xx---------------- 
-            setStandartFocus();
-            Thread.Sleep(2000);
-            //stabOff();
-            Stop();
+            //
+            
         }
 
         private void setStandartFocus()

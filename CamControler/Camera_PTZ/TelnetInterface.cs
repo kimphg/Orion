@@ -65,7 +65,6 @@ namespace Camera_PTZ
         {
             if (!tcpSocket.Connected)
             {
-                
                 return;
             }
                         
