@@ -86,7 +86,7 @@ namespace Camera_PTZ
             {
                 Environment.Exit(0);
             }
-            
+            ShowOpTop();
             //sending_socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
         }
         int radarCount = 0;
@@ -490,6 +490,7 @@ namespace Camera_PTZ
             this.WindowState = FormWindowState.Normal;
             this.Show();
             this.BringToFront();
+            this.BackColor = Color.Orange;
         }
         internal void HideToTray()
         {
@@ -514,6 +515,7 @@ namespace Camera_PTZ
             if (is2x) str += "2x Zoom|";
             if (antiFog) str += "Lọc mù|";
             if (mitigation) str += "Tăng nhạy nhiệt|";
+            textBox1.Text = str;
         }
         public void  GotoSelectedTarget()
         {

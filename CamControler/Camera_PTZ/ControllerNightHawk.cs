@@ -192,8 +192,8 @@ namespace Camera_PTZ
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
 
-            Thread.Sleep(2000);
-            Stop();
+            Thread.Sleep(1000);
+            
             setStandartFocus();
             Thread.Sleep(300);
             //set elevation ---------------- 
