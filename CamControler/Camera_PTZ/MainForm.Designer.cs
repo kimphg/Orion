@@ -90,7 +90,7 @@
             // 
             // textBox1
             // 
-            this.textBox1.Location = new System.Drawing.Point(12, 433);
+            this.textBox1.Location = new System.Drawing.Point(12, 437);
             this.textBox1.Margin = new System.Windows.Forms.Padding(2);
             this.textBox1.Name = "textBox1";
             this.textBox1.Size = new System.Drawing.Size(389, 20);
@@ -117,17 +117,19 @@
             // textBox_t_range
             // 
             this.textBox_t_range.Location = new System.Drawing.Point(249, 364);
+            this.textBox_t_range.MaxLength = 10;
             this.textBox_t_range.Name = "textBox_t_range";
             this.textBox_t_range.Size = new System.Drawing.Size(72, 20);
-            this.textBox_t_range.TabIndex = 2;
+            this.textBox_t_range.TabIndex = 3;
             this.textBox_t_range.Text = "10";
             // 
             // textBox_t_bearing
             // 
             this.textBox_t_bearing.Location = new System.Drawing.Point(114, 364);
+            this.textBox_t_bearing.MaxLength = 10;
             this.textBox_t_bearing.Name = "textBox_t_bearing";
             this.textBox_t_bearing.Size = new System.Drawing.Size(111, 20);
-            this.textBox_t_bearing.TabIndex = 3;
+            this.textBox_t_bearing.TabIndex = 2;
             this.textBox_t_bearing.Text = "0";
             // 
             // label4
@@ -160,7 +162,7 @@
             // button_add_target
             // 
             this.button_add_target.BackColor = System.Drawing.SystemColors.ActiveCaption;
-            this.button_add_target.Location = new System.Drawing.Point(11, 390);
+            this.button_add_target.Location = new System.Drawing.Point(11, 392);
             this.button_add_target.Margin = new System.Windows.Forms.Padding(2);
             this.button_add_target.Name = "button_add_target";
             this.button_add_target.Size = new System.Drawing.Size(122, 36);

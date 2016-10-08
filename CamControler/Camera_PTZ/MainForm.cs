@@ -13,9 +13,12 @@ using System.IO;
 using UsbHid;
 using UsbHid.USB.Classes.Messaging;
 using System.Diagnostics;
-
+using System.Xml.XPath;
+using System.Xml;
+using XMLSettings;
 namespace Camera_PTZ
 {
+
     public struct arpaOBJ
     {
         public String id;
@@ -35,6 +38,10 @@ namespace Camera_PTZ
     enum cameraType { pelco, nighthawk, flir } ;
     public partial class GuiMain : Form
     {
+        [DllImport("User32.dll")]
+        public static extern IntPtr GetDC(IntPtr hwnd);
+        [DllImport("User32.dll")]
+        public static extern void ReleaseDC(IntPtr hwnd, IntPtr dc);
 
         public volatile bool connectionActive;
         Thread workerThread;
@@ -42,6 +49,7 @@ namespace Camera_PTZ
         cameraType camtype;
         public Config mConfig;
         public List<arpaOBJ> ListRadar = new List<arpaOBJ>();
+        Point formLocation;
         //System.Windows.Forms.Timer getCamStateTimer;
         public  double GetTimeSec()
         {
@@ -61,7 +69,7 @@ namespace Camera_PTZ
         //private static PTZFacade _ptz;
         private const uint PRESET_PATTERN = 8;
         TelnetConnection tc;
-        UdpClient radarDatalisten;
+        UdpClient UDPDataSocket;
         public GuiMain()
         {
            
@@ -70,7 +78,8 @@ namespace Camera_PTZ
             //this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
             Rectangle resolution = Screen.PrimaryScreen.Bounds;
             this.StartPosition = FormStartPosition.Manual;
-            this.Location = new Point(0,resolution.Height/2 );
+            formLocation = new Point(resolution.Width/2+10, resolution.Height - 50);
+            this.Location = new Point(0, resolution.Height / 2); ;
             //this.Show();
             //UDPsock = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
             button5.Enabled = true;
@@ -79,10 +88,10 @@ namespace Camera_PTZ
             TopMost = true;
             connectionActive = false;
             try {
-                radarDatalisten = new UdpClient((int)mConfig.constants[4]);
-                radarDatalisten.BeginReceive(Receive, new object());
+                UDPDataSocket = new UdpClient(1800);//(int)mConfig.udpRadarPort);
+                UDPDataSocket.BeginReceive(Receive, new object());
             }
-            catch(Exception e)
+            catch(Exception e)//!!!
             {
                 Environment.Exit(0);
             }
@@ -92,24 +101,30 @@ namespace Camera_PTZ
         int radarCount = 0;
         private void Receive(IAsyncResult ar)
         {
-            radarCount = 5;
-            IPEndPoint ip = new IPEndPoint(IPAddress.Any, (int)mConfig.constants[4]);
-            byte[] receive_byte_array = radarDatalisten.Receive(ref ip);
-            for (int i = 0; i < receive_byte_array.Length; i++)
-            {
-                if ((receive_byte_array[i] < Convert.ToByte(' ')) || (receive_byte_array[i] > Convert.ToByte('~')))
+            try {
+                radarCount = 5;
+                IPEndPoint ip = new IPEndPoint(IPAddress.Any, (int)mConfig.udpRadarPort);
+                byte[] receive_byte_array = UDPDataSocket.Receive(ref ip);
+                for (int i = 0; i < receive_byte_array.Length; i++)
                 {
-                    receive_byte_array[i] = Convert.ToByte(',');
+                    if ((receive_byte_array[i] < Convert.ToByte(' ')) || (receive_byte_array[i] > Convert.ToByte('~')))
+                    {
+                        receive_byte_array[i] = Convert.ToByte(',');
+                    }
+                }
+                string received_data = Encoding.ASCII.GetString(receive_byte_array, 0, receive_byte_array.Length);
+                string[] strList = received_data.Split(',');
+                for (int i = 0; i < strList.Length - 4; i++)
+                {
+                    addARPA(strList);
+                    //strList.(0);
                 }
             }
-            string received_data = Encoding.ASCII.GetString(receive_byte_array, 0, receive_byte_array.Length);
-            string[] strList = received_data.Split(',');
-            for (int i = 0; i < strList.Length - 4; i++)
+            catch
             {
-                addARPA(strList);
-                //strList.(0);
+                return;
             }
-            radarDatalisten.BeginReceive(Receive, new object());
+            UDPDataSocket.BeginReceive(Receive, new object());
         }
         private void IPtextBox_TextChanged(object sender, EventArgs e)
         {
@@ -285,6 +300,7 @@ namespace Camera_PTZ
         int failedconnectionCount = 0;
         private void timer1_Tick(object sender, EventArgs e)
         {
+            ViewtData();
             if(radarCount>0)radarCount--;
             if(radarCount==0)
             {
@@ -304,6 +320,7 @@ namespace Camera_PTZ
                     {
                         comandNH.RequestStop();
                         workerThread.Abort();
+                        
                         tc.Disconnect();
                         tc.connectionAborted = false;
                     }
@@ -497,10 +514,19 @@ namespace Camera_PTZ
             this.WindowState = FormWindowState.Minimized;
             
         }
-
-        public void ViewtData(int cx, int cy)
+        String StatusStr ="-Chưa kết nối-";
+        public void ViewtData()
         {
-            
+            //IntPtr desktopPtr = GetDC(IntPtr.Zero);
+            //Graphics g = Graphics.FromHdc(desktopPtr);
+
+            //SolidBrush b = new SolidBrush(Color.Red);
+            //System.Drawing.Font font = new Font(new System.Drawing.FontFamily("Times New Roman"), 12);
+            //g.DrawString(StatusStr, font, b, formLocation);
+            //g.Dispose();
+            //ReleaseDC(IntPtr.Zero, desktopPtr);
+            byte[] dgram = Encoding.Unicode.GetBytes(StatusStr);
+            UDPDataSocket.Send(dgram, dgram.Length, "127.0.0.1", 8000);//send status string
         }
 
         public void ViewtData(int cx, int cy,double azi, bool onTracking, bool isconnected)
@@ -516,6 +542,8 @@ namespace Camera_PTZ
             if (antiFog) str += "Lọc mù|";
             if (mitigation) str += "Tăng nhạy nhiệt|";
             textBox1.Text = str;
+            StatusStr = str;
+            
         }
         public void  GotoSelectedTarget()
         {
@@ -558,80 +586,89 @@ namespace Camera_PTZ
     }
     public class Config
     {
-        public double[] constants;
-        public String ipAdress;
-        public String trackerFile;
-        public String WorkingDir;
+        //public double[] constants;
+        public String ipAdress ;
+        public String trackerFileName ;
+        public  String WorkingDir;
+        public double BearingOfEleError;//
+        public double maxEleError;
+        public double targetSize;//
+        public double udpRadarPort;
+        public double elevationErr;
+        public double aziError;
+        public double zoomrate;
+        public double focusrate;
+        public double trackSensitive;
+        XmlSettings xmlData;
+        String xmlFileName = "cam_config.xml";
         public Config()
         {
-            int nparam = 20;
-            constants = new double[nparam];
-            
-            double[] constantsDefault = new double[nparam];
-            constantsDefault[2] = 0;// chuan phuong bac
-            constantsDefault[3] = 0;// hieu chinh goc ta` 
-            constantsDefault[4] = 2917;//cong du lieu radar
-            constantsDefault[5] = 100.0;//he so zoom
-            constantsDefault[6] = 8;//do nhay tilt
-            constantsDefault[7] = 13;//min focus
-            constantsDefault[8] = 15;//do nhay zoom Vissible--
-            constantsDefault[9] = 0;//
-            constantsDefault[10] = 5;//do nhay focus IR--
-
-
+            xmlData = new XmlSettings();
+            xmlData.Load(xmlFileName);
+            //int nparam = 20;
             try
             {
-                StreamReader sr = new StreamReader(@"C:\Program Files\NHCamera\cam_config.txt");
-                for (int i = 0; i < nparam; i++)
-                {
-                    String str = sr.ReadLine();
-                    // doc cac gia tri config
-                    if (str != null)
-                    {
-                        String[] line = str.Split(';');
-                        if (i == 0)
-                        {
-                            ipAdress = line[0];
+                loadSettingsFromfile();
 
-                        }
-                        else
-                        if (i == 1)
-                        {
-                            trackerFile = line[0];
-                            String[] strList = trackerFile.Split('\\');
-                            strList[strList.Length - 1] = null;
-                            WorkingDir = string.Join("\\",strList);
-                            
-
-                        }
-                        else if (i > 1)
-                        {
-                            constants[i] = double.Parse(line[0]);
-                        }
-                    }
-                    else
-                    {
-                        constants[i] = constantsDefault[i];
-                    }
-                }
-                
             }
             catch (Exception e)
             {
-                //if (constants[0]==0) constants[0] = 20;//Delta H in metres
-                //1-2 elevation calibrating
-                if (ipAdress==null) ipAdress = "192.168.150.92";
-                if (trackerFile == null) trackerFile = "C:\\Program Files\\NHCamera\\TrackCam.exe";
-                String[] strList = trackerFile.Split('\\');
-                strList[strList.Length - 1] = null;
-                WorkingDir = strList.ToString();
-                for (int i = 0; i < nparam; i++)
-                {
-                    if (constants[i] == null) constants[i] = constantsDefault[i];
-                }
-                //MessageBox.Show(e.Message);2
+                loadDefaultSettings();
+                return;
+                
             }
         }
+
+        private void loadDefaultSettings()
+        {
+            ipAdress ="192.168.150.92";
+            trackerFileName = "C:\\Program Files\\NHCamera\\TrackCam.exe";
+            xmlData.SetValue("ipAdress", ipAdress);
+            xmlData.SetValue("trackerFileName", trackerFileName);
+            String[] strList = trackerFileName.Split('\\');
+            strList[strList.Length - 1] = null;
+            WorkingDir = strList.ToString();
+            targetSize = 100;xmlData.SetValue("targetSize", targetSize);
+            BearingOfEleError = 0;xmlData.SetValue("BearingOfEleError", BearingOfEleError);
+            maxEleError = 0;xmlData.SetValue("maxEleError", maxEleError);
+            udpRadarPort = 2917;xmlData.SetValue("udpRadarPort", udpRadarPort);
+            elevationErr = 0;xmlData.SetValue("elevationErr", elevationErr);
+            aziError = 0;xmlData.SetValue("aziError", aziError);
+            zoomrate = 0;xmlData.SetValue("zoomrate", zoomrate);
+            focusrate = 0;xmlData.SetValue("focusrate", focusrate);
+            trackSensitive = 0.4;xmlData.SetValue("trackSensitive", trackSensitive);
+            xmlData.Save(xmlFileName);
+        }
+        private void loadSettingsFromfile()
+        {
+            xmlData.Load(xmlFileName);
+            ipAdress = xmlData.GetValue<string>("ipAdress");
+            trackerFileName =  xmlData.GetValue<string>("trackerFileName");
+            String[] strList = trackerFileName.Split('\\');
+            strList[strList.Length - 1] = null;
+            WorkingDir = strList.ToString();
+            targetSize = xmlData.GetValue<double>("targetSize");
+            BearingOfEleError = xmlData.GetValue<double>("BearingOfEleError");
+            maxEleError = xmlData.GetValue<double>("maxEleError");
+            udpRadarPort = xmlData.GetValue<double>("udpRadarPort");
+            elevationErr = xmlData.GetValue<double>("elevationErr");
+            aziError = xmlData.GetValue<double>("aziError");
+            zoomrate = xmlData.GetValue<double>("zoomrate");
+            focusrate = xmlData.GetValue<double>("focusrate");
+            trackSensitive = xmlData.GetValue<double>("trackSensitive"); 
+            //xmlData.SetValue("targetSize", targetSize);
+            //xmlData.SetValue("BearingOfEleError", BearingOfEleError);
+            //xmlData.SetValue("maxEleError", maxEleError);
+            //xmlData.SetValue("udpRadarPort", udpRadarPort);
+            //xmlData.SetValue("elevationErr", elevationErr);
+            //xmlData.SetValue("aziError", aziError);
+            //xmlData.SetValue("zoomrate", zoomrate);
+            //xmlData.SetValue("focusrate", focusrate);
+            //xmlData.SetValue("trackSensitive", trackSensitive);
+            //xmlData.Save(xmlFileName);
+        }
+        
+
     }
     
     public class CommandTransferPelco
