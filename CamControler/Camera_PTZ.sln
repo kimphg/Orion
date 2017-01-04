@@ -10,6 +10,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Camera_PTZ", "Camera_PTZ\Ca
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UsbHid", "UsbHid\UsbHid.csproj", "{83BC9702-4192-4654-B359-14CBD71D656E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KeyGen", "Camera_PTZ\KeyGen\KeyGen.csproj", "{183F5C37-810D-4A77-AA5B-28AEAADCD04F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -40,6 +42,16 @@ Global
 		{83BC9702-4192-4654-B359-14CBD71D656E}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
 		{83BC9702-4192-4654-B359-14CBD71D656E}.Release|Mixed Platforms.Build.0 = Release|Any CPU
 		{83BC9702-4192-4654-B359-14CBD71D656E}.Release|Win32.ActiveCfg = Release|Any CPU
+		{183F5C37-810D-4A77-AA5B-28AEAADCD04F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{183F5C37-810D-4A77-AA5B-28AEAADCD04F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{183F5C37-810D-4A77-AA5B-28AEAADCD04F}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
+		{183F5C37-810D-4A77-AA5B-28AEAADCD04F}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
+		{183F5C37-810D-4A77-AA5B-28AEAADCD04F}.Debug|Win32.ActiveCfg = Debug|Any CPU
+		{183F5C37-810D-4A77-AA5B-28AEAADCD04F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{183F5C37-810D-4A77-AA5B-28AEAADCD04F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{183F5C37-810D-4A77-AA5B-28AEAADCD04F}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{183F5C37-810D-4A77-AA5B-28AEAADCD04F}.Release|Mixed Platforms.Build.0 = Release|Any CPU
+		{183F5C37-810D-4A77-AA5B-28AEAADCD04F}.Release|Win32.ActiveCfg = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

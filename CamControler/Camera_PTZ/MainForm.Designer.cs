@@ -69,13 +69,11 @@
             // 
             // ConnectingTimer
             // 
-            this.ConnectingTimer.Enabled = true;
             this.ConnectingTimer.Interval = 1000;
             this.ConnectingTimer.Tick += new System.EventHandler(this.timer1_Tick);
             // 
             // timerPelcoCommand
             // 
-            this.timerPelcoCommand.Enabled = true;
             this.timerPelcoCommand.Tick += new System.EventHandler(this.timerPelcoCommand_Tick);
             // 
             // listBox1

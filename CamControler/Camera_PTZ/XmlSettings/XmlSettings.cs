@@ -109,6 +109,8 @@ namespace XMLSettings
         /// <param name="path">path to the XML file with settings</param>
         public void Load(string path)
         {
+            try
+            { 
             this.properties.Clear();
 
             XmlDocument document = new XmlDocument();
@@ -148,7 +150,12 @@ namespace XMLSettings
                     this.properties.Add(
                         propertyName,
                         new XmlSettingsProperty(propertyValueSerialized, propertyIsBinary));
+                    }
+                    }
                 }
+            catch(Exception e)
+            {
+                return;
             }
         }
 

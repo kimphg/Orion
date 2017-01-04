@@ -16,9 +16,10 @@ using System.Diagnostics;
 using System.Xml.XPath;
 using System.Xml;
 using XMLSettings;
+using System.Management;
+using System.Security.Cryptography;
 namespace Camera_PTZ
 {
-
     public struct arpaOBJ
     {
         public String id;
@@ -70,11 +71,14 @@ namespace Camera_PTZ
         private const uint PRESET_PATTERN = 8;
         TelnetConnection tc;
         UdpClient UDPDataSocket;
+        
         public GuiMain()
         {
-           
+            
             InitializeComponent();
             mConfig = new Config();
+            
+            this.ConnectingTimer.Enabled = true;
             //this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
             Rectangle resolution = Screen.PrimaryScreen.Bounds;
             this.StartPosition = FormStartPosition.Manual;
@@ -599,30 +603,95 @@ namespace Camera_PTZ
         public double zoomrate;
         public double focusrate;
         public double trackSensitive;
+        public string lisenceCode;
+        public bool isActivated;
         XmlSettings xmlData;
-        String xmlFileName = "cam_config.xml";
+        String xmlFileName = @"C:\NHCamera\cam_config.xml";
+        String xmlFilePath = @"C:\NHCamera\";
+        private static string GetSHA512(string text)
+        {
+            UnicodeEncoding UE = new UnicodeEncoding();
+            byte[] hashValue;
+            byte[] message = UE.GetBytes(text);
+            SHA512Managed hashString = new SHA512Managed();
+            string encodedData = Convert.ToBase64String(message);
+            string hex = "";
+            hashValue = hashString.ComputeHash(UE.GetBytes(encodedData));
+            foreach (byte x in hashValue)
+            {
+                if(x>'0'&&x<'Z')
+                hex += x.ToString();
+            }
+            return hex;
+        }
         public Config()
         {
-            xmlData = new XmlSettings();
-            xmlData.Load(xmlFileName);
+            
             //int nparam = 20;
             try
             {
+                xmlData = new XmlSettings();
+                xmlData.Load(xmlFileName);
                 loadSettingsFromfile();
+                
+                
 
             }
             catch (Exception e)
             {
                 loadDefaultSettings();
-                return;
                 
+                
+            }
+            string strId = null;
+            try
+            {
+                ManagementObjectSearcher searcher = new ManagementObjectSearcher("root\\CIMV2", "SELECT * FROM Win32_Processor");
+
+                foreach (ManagementObject queryObj in searcher.Get())
+                {
+                    //Console.WriteLine("-----------------------------------");
+                    //Console.WriteLine("Win32_Processor instance");
+                    //Console.WriteLine("-----------------------------------");
+                    //Console.WriteLine("Architecture: {0}", queryObj["Architecture"]);
+                    //Console.WriteLine("Caption: {0}", queryObj["Caption"]);
+                    //Console.WriteLine("Family: {0}", queryObj["Family"]);
+                    //Console.WriteLine("ProcessorId: {0}", queryObj["ProcessorId"]);
+                    strId += queryObj["ProcessorId"];
+                }
+            }
+            catch (ManagementException e)
+            {
+                MessageBox.Show("An error occurred while querying for WMI data: " + e.Message);
+            }
+            string code = GetSHA512(strId);
+            if (code.Length > 10) code = code.Substring(0, 10);
+            if (lisenceCode != code)
+                isActivated = false;
+            else isActivated = true;
+            if (!isActivated)
+            {
+                FormLisenceManager frm = new FormLisenceManager();
+                frm.setId(strId);
+                frm.ShowDialog();
+                lisenceCode = frm.code;
+                if (lisenceCode != code)
+                {
+                    isActivated = false;
+                    MessageBox.Show("Mã kích hoạt sai.");
+                    Application.ExitThread();
+                    Environment.Exit(0);
+                }
+                else isActivated = true;
+                xmlData.SetValue("lisenceCode", lisenceCode);
+                xmlData.Save(xmlFileName);
             }
         }
 
         private void loadDefaultSettings()
         {
             ipAdress ="192.168.150.92";
-            trackerFileName = "C:\\Program Files\\NHCamera\\TrackCam.exe";
+            trackerFileName = "C:\\NHCamera\\TrackCam.exe";
             xmlData.SetValue("ipAdress", ipAdress);
             xmlData.SetValue("trackerFileName", trackerFileName);
             String[] strList = trackerFileName.Split('\\');
@@ -637,6 +706,8 @@ namespace Camera_PTZ
             zoomrate = 0;xmlData.SetValue("zoomrate", zoomrate);
             focusrate = 0;xmlData.SetValue("focusrate", focusrate);
             trackSensitive = 0.4;xmlData.SetValue("trackSensitive", trackSensitive);
+            lisenceCode = "0"; xmlData.SetValue("lisenceCode", lisenceCode);
+            if (!Directory.Exists(xmlFilePath)) Directory.CreateDirectory(xmlFilePath);
             xmlData.Save(xmlFileName);
         }
         private void loadSettingsFromfile()
@@ -655,7 +726,8 @@ namespace Camera_PTZ
             aziError = xmlData.GetValue<double>("aziError");
             zoomrate = xmlData.GetValue<double>("zoomrate");
             focusrate = xmlData.GetValue<double>("focusrate");
-            trackSensitive = xmlData.GetValue<double>("trackSensitive"); 
+            trackSensitive = xmlData.GetValue<double>("trackSensitive");
+            lisenceCode = xmlData.GetValue<string>("lisenceCode"); 
             //xmlData.SetValue("targetSize", targetSize);
             //xmlData.SetValue("BearingOfEleError", BearingOfEleError);
             //xmlData.SetValue("maxEleError", maxEleError);
