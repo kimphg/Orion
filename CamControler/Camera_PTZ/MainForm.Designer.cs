@@ -44,6 +44,7 @@
             this.label6 = new System.Windows.Forms.Label();
             this.label7 = new System.Windows.Forms.Label();
             this.button_add_target = new System.Windows.Forms.Button();
+            this.button1 = new System.Windows.Forms.Button();
             this.SuspendLayout();
             // 
             // button5
@@ -169,12 +170,23 @@
             this.button_add_target.UseVisualStyleBackColor = false;
             this.button_add_target.Click += new System.EventHandler(this.button_add_target_Click);
             // 
+            // button1
+            // 
+            this.button1.Location = new System.Drawing.Point(348, 348);
+            this.button1.Name = "button1";
+            this.button1.Size = new System.Drawing.Size(53, 36);
+            this.button1.TabIndex = 29;
+            this.button1.Text = "Mô phỏng";
+            this.button1.UseVisualStyleBackColor = true;
+            this.button1.Click += new System.EventHandler(this.button1_Click_2);
+            // 
             // GuiMain
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.SystemColors.Control;
             this.ClientSize = new System.Drawing.Size(420, 463);
+            this.Controls.Add(this.button1);
             this.Controls.Add(this.button_add_target);
             this.Controls.Add(this.textBox_t_bearing);
             this.Controls.Add(this.textBox_t_range);
@@ -214,6 +226,7 @@
         private System.Windows.Forms.Label label6;
         private System.Windows.Forms.Label label7;
         private System.Windows.Forms.Button button_add_target;
+        private System.Windows.Forms.Button button1;
 
     }
 }

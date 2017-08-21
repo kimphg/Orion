@@ -39,10 +39,10 @@ namespace Camera_PTZ
     enum cameraType { pelco, nighthawk, flir } ;
     public partial class GuiMain : Form
     {
-        [DllImport("User32.dll")]
+        /*[DllImport("User32.dll")]
         public static extern IntPtr GetDC(IntPtr hwnd);
         [DllImport("User32.dll")]
-        public static extern void ReleaseDC(IntPtr hwnd, IntPtr dc);
+        public static extern void ReleaseDC(IntPtr hwnd, IntPtr dc);*/
 
         public volatile bool connectionActive;
         Thread workerThread;
@@ -77,7 +77,7 @@ namespace Camera_PTZ
             
             InitializeComponent();
             mConfig = new Config();
-            
+            isSimulation = false;
             this.ConnectingTimer.Enabled = true;
             //this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
             Rectangle resolution = Screen.PrimaryScreen.Bounds;
@@ -331,6 +331,10 @@ namespace Camera_PTZ
                 }
                 return;
             }
+            if (isSimulation)
+            {
+                return;
+            }
             BackgroundWorker bw = new BackgroundWorker();
             // what to do in the background thread
             bw.DoWork += new DoWorkEventHandler(
@@ -519,6 +523,7 @@ namespace Camera_PTZ
             
         }
         String StatusStr ="-Chưa kết nối-";
+        private bool isSimulation;
         public void ViewtData()
         {
             //IntPtr desktopPtr = GetDC(IntPtr.Zero);
@@ -586,6 +591,14 @@ namespace Camera_PTZ
         private void button2_Click_1(object sender, EventArgs e)
         {
             targetDown();
+        }
+
+        private void button1_Click_2(object sender, EventArgs e)
+        {
+            comandNH = new ControllerNightHawk( this);
+            workerThread = new Thread(comandNH.ListenToCommand);
+            workerThread.Start();
+            isSimulation = true;
         }
     }
     public class Config

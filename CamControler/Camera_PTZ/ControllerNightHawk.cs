@@ -54,6 +54,7 @@ namespace Camera_PTZ
         GuiMain m_Gui;
         double x_sum = 0, y_sum = 0;
         private int errCount =-50;
+        bool isSimulation = false;
         public ControllerNightHawk(TelnetConnection tconnect, GuiMain ptzControl)
         {
             //restartTracker();// restart chuong trinh cua anh Thi
@@ -65,6 +66,25 @@ namespace Camera_PTZ
             joystickOnline = pDevice.Connect();
             // ket noi den camera
             tc = tconnect;
+            m_Gui = ptzControl;
+            //mo socket
+            mUpdateTimer = new System.Threading.Timer(TimerCallback, null, 100, 100);
+            timer200ms = new System.Threading.Timer(Timer200, null, 500, 500);
+            listener = new UdpClient(8001);
+            groupEP = new IPEndPoint(IPAddress.Any, 0);
+            initCommand();
+        }
+        public ControllerNightHawk(GuiMain ptzControl)
+        {
+            //restartTracker();// restart chuong trinh cua anh Thi
+            //ket noi den joystick
+            pDevice = new UsbHidDevice(0x046D, 0xC215);
+            //pDevice.OnConnected += DeviceOnConnected;
+            //pDevice.OnDisConnected += DeviceOnDisConnected;
+            pDevice.DataReceived += DeviceDataReceived;
+            joystickOnline = pDevice.Connect();
+            // ket noi den camera
+            isSimulation = true;
             m_Gui = ptzControl;
             //mo socket
             mUpdateTimer = new System.Threading.Timer(TimerCallback, null, 100, 100);
@@ -202,15 +222,8 @@ namespace Camera_PTZ
             Thread.Sleep(500);
             byte[] cmd = new byte[8];
             //set azi ----------------------- 
-            ushort newazi = getAzi();
-            cmd[0] = 0xFF;
-            cmd[1] = 0x00;
-            cmd[2] = 0x05;
-            cmd[3] = 0x77;
-            cmd[4] = (byte)(newazi >> 8);
-            cmd[5] = (byte)(newazi);
-            cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
-            tc.Write(cmd);
+            sendAziCtrl();
+            
 
             Thread.Sleep(1000);
             
@@ -860,15 +873,7 @@ namespace Camera_PTZ
                         double.TryParse(coor[1], out bearing);//degrees
                         //set azi ----------------------- 
                         //MessageBox.Show("new azi tracking");
-                        ushort newazi = getAzi();
-                        cmd[0] = 0xFF;
-                        cmd[1] = 0x00;
-                        cmd[2] = 0x05;
-                        cmd[3] = 0x77;
-                        cmd[4] = (byte)(newazi >> 8);
-                        cmd[5] = (byte)(newazi);
-                        cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
-                        tc.Write(cmd);
+                        sendAziCtrl();
 
                     }
                     else if ((coor[0] == "2XMUL") && (coor.Length >= 2))
@@ -1589,7 +1594,6 @@ namespace Camera_PTZ
             uint rate = 15;//(uint)m_Gui.mConfig.constants[4];
             //if (!tinhChinh) rate *= 2;
             if (rate > 63) rate = 63;
-            ushort newazi = getAzi();
             cmd[0] = 0xFF;
             cmd[1] = 0x00;
             cmd[2] = 0x00;
@@ -1602,7 +1606,6 @@ namespace Camera_PTZ
         void zoomStep(int a)// gia tri 1 hoac 2
         {
             byte[] cmd = new byte[8];
-            ushort newazi = getAzi();
             cmd[0] = 0xFF;
             cmd[1] = 0x00;
             cmd[2] = 0x32;
@@ -1617,7 +1620,6 @@ namespace Camera_PTZ
         {
             //zoomVisIn();
             byte[] cmd = new byte[8];
-            ushort newazi = getAzi();
             cmd[0] = 0xFF;
             cmd[1] = 0x00;
             cmd[2] = 0x00;
@@ -1627,10 +1629,24 @@ namespace Camera_PTZ
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
         }
-        private ushort getAzi()
+        private void sendAziCtrl()
         {
+            if (isSimulation)
+            {
 
-            return (ushort)(0xffff * ((bearing) / (360.0)));
+                return;
+            }
+
+            byte[] cmd = new byte[8];
+            ushort newazi =  (ushort)(0xffff * ((bearing) / (360.0)));
+            cmd[0] = 0xFF;
+            cmd[1] = 0x00;
+            cmd[2] = 0x05;
+            cmd[3] = 0x77;
+            cmd[4] = (byte)(newazi >> 8);
+            cmd[5] = (byte)(newazi);
+            cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
+            tc.Write(cmd);
         }
 
 
