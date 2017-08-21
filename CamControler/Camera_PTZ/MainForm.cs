@@ -534,7 +534,7 @@ namespace Camera_PTZ
             //g.DrawString(StatusStr, font, b, formLocation);
             //g.Dispose();
             //ReleaseDC(IntPtr.Zero, desktopPtr);
-            byte[] dgram = Encoding.Unicode.GetBytes(StatusStr);
+            byte[] dgram = Encoding.Unicode.GetBytes(StatusStr.Replace('|','$'));
             UDPDataSocket.Send(dgram, dgram.Length, "127.0.0.1", 8000);//send status string
         }
 
@@ -542,15 +542,16 @@ namespace Camera_PTZ
         {
             textBox1.Text = "X:"+cx.ToString() + "|Y:" +"|Azi:"+azi.ToString("0.0") + cy.ToString() + "|Track:" + onTracking.ToString() + "|Connected:" + isconnected.ToString();
         }
-        public void ViewtData(bool isStab,bool onTracking, bool is2x,bool antiFog,bool mitigation)
+        public void ViewtData(bool isStab,bool onTracking, bool is2x,bool antiFog,bool mitigation, double bearing,double elevation)
         {
-            String str = "|";
+            String str = "";
             if (isStab) str += "Tự ổn định|";
             if (onTracking) str += "Bám MT|";
             if (is2x) str += "2x Zoom|";
             if (antiFog) str += "Lọc mù|";
             if (mitigation) str += "Tăng nhạy nhiệt|";
             textBox1.Text = str;
+            str = "Phương vị:" + bearing.ToString("0.##") + "|" + "Góc tà:" + elevation.ToString("0.##") + "|" + str;
             StatusStr = str;
             
         }
@@ -595,10 +596,13 @@ namespace Camera_PTZ
 
         private void button1_Click_2(object sender, EventArgs e)
         {
-            comandNH = new ControllerNightHawk( this);
-            workerThread = new Thread(comandNH.ListenToCommand);
-            workerThread.Start();
-            isSimulation = true;
+            if (!isSimulation)
+            {
+                comandNH = new ControllerNightHawk(this);
+                workerThread = new Thread(comandNH.ListenToCommand);
+                workerThread.Start();
+                isSimulation = true;
+            }
         }
     }
     public class Config
