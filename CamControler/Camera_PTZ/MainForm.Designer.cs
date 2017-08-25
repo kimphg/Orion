@@ -89,10 +89,11 @@
             // 
             // textBox1
             // 
-            this.textBox1.Location = new System.Drawing.Point(12, 437);
+            this.textBox1.Location = new System.Drawing.Point(12, 432);
             this.textBox1.Margin = new System.Windows.Forms.Padding(2);
+            this.textBox1.Multiline = true;
             this.textBox1.Name = "textBox1";
-            this.textBox1.Size = new System.Drawing.Size(389, 20);
+            this.textBox1.Size = new System.Drawing.Size(389, 36);
             this.textBox1.TabIndex = 20;
             this.textBox1.TextChanged += new System.EventHandler(this.textBox2_TextChanged);
             // 
@@ -185,7 +186,7 @@
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.SystemColors.Control;
-            this.ClientSize = new System.Drawing.Size(420, 463);
+            this.ClientSize = new System.Drawing.Size(420, 473);
             this.Controls.Add(this.button1);
             this.Controls.Add(this.button_add_target);
             this.Controls.Add(this.textBox_t_bearing);
