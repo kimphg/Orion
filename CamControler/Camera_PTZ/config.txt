@@ -1,2 +1,0 @@
-20 deltaH
-1 zoom/km

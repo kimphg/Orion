@@ -601,6 +601,7 @@ namespace Camera_PTZ
                 comandNH = new ControllerNightHawk(this);
                 workerThread = new Thread(comandNH.ListenToCommand);
                 workerThread.Start();
+                //Process.Start(@"C:\NHCamera\SimCam\HQVN.exe");
                 isSimulation = true;
             }
         }
@@ -708,7 +709,7 @@ namespace Camera_PTZ
         private void loadDefaultSettings()
         {
             ipAdress ="192.168.150.92";
-            trackerFileName = "C:\\NHCamera\\TrackCam.exe";
+            trackerFileName = "C:\\NHCamera\\TrackCam\\TrackCam.exe";
             xmlData.SetValue("ipAdress", ipAdress);
             xmlData.SetValue("trackerFileName", trackerFileName);
             String[] strList = trackerFileName.Split('\\');
