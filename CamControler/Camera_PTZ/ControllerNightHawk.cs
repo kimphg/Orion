@@ -125,7 +125,7 @@ namespace Camera_PTZ
             cmd[2] = 0x0F;
             cmd[3] = 0x77;
             cmd[4] = 0x26;
-            cmd[5] = 0x00;
+            cmd[5] = 0x01;
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);//azi
         }
@@ -140,7 +140,6 @@ namespace Camera_PTZ
                     errCount = 0;
                 }
                 queryLensValue();
-                
                 queryRangeFinder();
                 getLensValue();
                 //read status values from camera
@@ -200,6 +199,7 @@ namespace Camera_PTZ
                     else if ( input[pos + 2] == 0x0A && input[pos + 3] == 0x77)//curCamEle
                     {
                         curCamEle = ((input[pos + 4] << 8) | input[pos + 5]) * 0.0054931640625;/// 65536.0 * 360.0;
+                        if (curCamEle > 180) curCamEle -= 360;                                                                       /// 
 
                     }
                     else if ( input[pos + 2] == 0x50 && input[pos + 3] == 0x77 )//Focus value
@@ -244,6 +244,7 @@ namespace Camera_PTZ
             cmd[5] = 0x00;
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
+            
         }
         public void StartRadarTargetTrack()
         {
@@ -802,7 +803,10 @@ namespace Camera_PTZ
             Process process2 = new Process();
             process2.StartInfo.FileName = m_Gui.mConfig.trackerFileName;
             process2.StartInfo.WorkingDirectory = m_Gui.mConfig.WorkingDir;
+            if(File.Exists(process2.StartInfo.FileName))
             process2.Start();
+            else
+                MessageBox.Show("Không tìm thấy phần mềm TrackCam");
             if (isSimulation)
             { 
             }
@@ -1084,7 +1088,8 @@ namespace Camera_PTZ
                 curCamEle = simElevation;
                 curCamAzi = simBearing;
             }
-            str = "Phương vị:" + curCamAzi.ToString("0.##") + " | " + "Góc tà:" + curCamEle.ToString("0.##") + " | " + "Cự ly RF:" + curRFvalue.ToString() + " \r\n|" + str;
+
+            str = "Phương vị:" + curCamAzi.ToString("0.##") + " | " + "Góc tà:" + curCamEle.ToString("0.##") + " \r\n| " + "Cự ly RF:" + curRFvalue.ToString() + " | " + "Tiêu cự:" + curCamFocus.ToString() + " |" + str;
             ThreadSafe(() => m_Gui.ViewtData(str));
             /*
             if (isSimulation)

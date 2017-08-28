@@ -92,7 +92,7 @@ namespace Camera_PTZ
             TopMost = true;
             connectionActive = false;
             try {
-                UDPDataSocket = new UdpClient(1800);//(int)mConfig.udpRadarPort);
+                UDPDataSocket = new UdpClient((int)mConfig.udpRadarPort);
                 UDPDataSocket.BeginReceive(Receive, new object());
             }
             catch(Exception e)//!!!
@@ -107,7 +107,7 @@ namespace Camera_PTZ
         {
             try {
                 radarCount = 5;
-                IPEndPoint ip = new IPEndPoint(IPAddress.Any, (int)mConfig.udpRadarPort);
+                IPEndPoint ip = new IPEndPoint(IPAddress.Any,0);
                 byte[] receive_byte_array = UDPDataSocket.Receive(ref ip);
                 for (int i = 0; i < receive_byte_array.Length; i++)
                 {
