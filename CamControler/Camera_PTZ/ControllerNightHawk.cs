@@ -1089,7 +1089,7 @@ namespace Camera_PTZ
                 curCamAzi = simBearing;
             }
 
-            str = "Phương vị:" + curCamAzi.ToString("0.##") + " | " + "Góc tà:" + curCamEle.ToString("0.##") + " \r\n| " + "Cự ly RF:" + curRFvalue.ToString() + " | " + "Tiêu cự:" + curCamFocus.ToString() + " |" + str;
+            str = "Phương vị: " + curCamAzi.ToString("0.##") + " |" + "Góc tà: " + curCamEle.ToString("0.##") + " \r\n|" + "Khoảng cách: " + curRFvalue.ToString() + " |" + "Tiêu cự: " + curCamFocus.ToString() + " |" + str;
             ThreadSafe(() => m_Gui.ViewtData(str));
             /*
             if (isSimulation)
