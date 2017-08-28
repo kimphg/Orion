@@ -118,7 +118,7 @@ namespace Camera_PTZ
                 }
                 string received_data = Encoding.ASCII.GetString(receive_byte_array, 0, receive_byte_array.Length);
                 string[] strList = received_data.Split(',');
-                for (int i = 0; i < strList.Length - 4; i++)
+                for (int i = 0; i < strList.Length ; i++)
                 {
                     addARPA(strList);
                     //strList.(0);
