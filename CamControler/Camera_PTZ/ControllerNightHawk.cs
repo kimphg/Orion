@@ -129,6 +129,7 @@ namespace Camera_PTZ
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);//azi
         }
+        bool queryMode = true;
         private void Timer200(object state)
         {
 
@@ -139,9 +140,10 @@ namespace Camera_PTZ
                     restartTracker();
                     errCount = 0;
                 }
-                queryLensValue();
-                queryRangeFinder();
-                getLensValue();
+                if (queryMode) queryLensValue();
+                else queryRangeFinder();
+                queryMode = (!queryMode);
+                getRespondValue();
                 //read status values from camera
                 
                 //else if (input[0] == 0xFF && input[2] == 0x0A && input[3] == 0x77)
@@ -173,7 +175,7 @@ namespace Camera_PTZ
 
 
 
-        private void getLensValue()
+        private void getRespondValue()
         {
             while (true)
             {
@@ -235,7 +237,6 @@ namespace Camera_PTZ
             cmd[5] = 0x00;
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);//ele
-            return;
             cmd[0] = 0xFF;
             cmd[1] = 0x00;
             cmd[2] = 0x50;
@@ -795,6 +796,7 @@ namespace Camera_PTZ
         private double simElevationRate = 0;
         private double simFOV = 30;
         private double curRFvalue;
+        private double curFieldOfView;
         
         
         public void ListenToCommand()
@@ -1089,7 +1091,12 @@ namespace Camera_PTZ
                 curCamAzi = simBearing;
             }
 
-            str = "Phương vị: " + curCamAzi.ToString("0.##") + " |" + "Góc tà: " + curCamEle.ToString("0.##") + " \r\n|" + "Khoảng cách: " + curRFvalue.ToString() + " |" + "Tiêu cự: " + curCamFocus.ToString() + " |" + str;
+            str = "Phương vị: " + curCamAzi.ToString("0.##") 
+                + " |" + "Góc tà: " + curCamEle.ToString("0.##") + " \r\n|" 
+                + "Khoảng cách: " + curRFvalue.ToString() 
+                + " |" + "Tiêu cự: " + curCamFocus.ToString() 
+                + " |" + "Trường nhìn: " + curFieldOfView.ToString()+ " |"
+                + str;
             ThreadSafe(() => m_Gui.ViewtData(str));
             /*
             if (isSimulation)
@@ -1633,70 +1640,70 @@ namespace Camera_PTZ
         void UpdateZoom()
         {
             
-            int FOV;
+            int camFOV;
             if(isVisCam)
             {
                 switch (zoomFovVis)
                 {
                     case 0:
                         focusVis = 957;
-                        FOV = 3;
+                        camFOV = 3;
                         break;
                     case 1:
                         focusVis = 956;
-                        FOV = 5;
+                        camFOV = 5;
                         break;
                     case 2:
                         focusVis = 956;
-                        FOV = 7; break;
+                        camFOV = 7; break;
                     case 3:
                         focusVis = 955;
-                        FOV = 9; break;
+                        camFOV = 9; break;
                     case 4:
                         focusVis = 955;
-                        FOV = 12; break;
+                        camFOV = 12; break;
                     case 5:
                         focusVis = 955;
-                        FOV = 18; break;
+                        camFOV = 18; break;
                     case 6:
                         focusVis = 955;
-                        FOV = 24; break;
+                        camFOV = 24; break;
                     case 7:
                         focusVis = 954;
-                        FOV = 32; break;
+                        camFOV = 32; break;
                     case 8:
                         focusVis = 954;
-                        FOV = 48; break;
+                        camFOV = 48; break;
                     case 9:
                         focusVis = 953;
-                        FOV = 60; break;
+                        camFOV = 60; break;
                     case 10:
                         focusVis = 953;
-                        FOV = 90; break;
+                        camFOV = 90; break;
                     case 11:
                         focusVis = 952;
-                        FOV = 120; break;
+                        camFOV = 120; break;
                     case 12:
                         focusVis = 952;
-                        FOV = 150; break;
+                        camFOV = 150; break;
                     case 13:
                         focusVis = 951;
-                        FOV = 200; break;
+                        camFOV = 200; break;
                     case 14:
                         focusVis = 951;
-                        FOV = 300; break;
+                        camFOV = 300; break;
                     case 15:
                         focusVis = 951;
-                        FOV = 400; break;
+                        camFOV = 400; break;
                     case 16:
                         focusVis = 950;
-                        FOV = 500; break;
+                        camFOV = 500; break;
                     default:
                         return;
                 }
                 if (isSimulation)
                 {
-                    simFOV = FOV/10.0;
+                    simFOV = camFOV/10.0;
                 }
                 else
                 {
@@ -1705,8 +1712,8 @@ namespace Camera_PTZ
                     cmd[1] = 0x00;
                     cmd[2] = 0x07;
                     cmd[3] = 0x77;
-                    cmd[4] = (byte)((FOV >> 8) | (0x70));// Vis camera zoom
-                    cmd[5] = (byte)(FOV);
+                    cmd[4] = (byte)((camFOV >> 8) | (0x70));// Vis camera zoom
+                    cmd[5] = (byte)(camFOV);
                     cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
                     tc.Write(cmd);
                 }
@@ -1714,8 +1721,8 @@ namespace Camera_PTZ
                 byte[] dgram;
                 dgram = new byte[3];
                 dgram[0] = 0xfe;
-                dgram[1] = (byte)((50000/FOV)>>8);
-                dgram[2] = (byte)(50000/FOV);
+                dgram[1] = (byte)((50000/camFOV)>>8);
+                dgram[2] = (byte)(50000/camFOV);
                 listener.Send(dgram, 3, "127.0.0.1", 8000);//send zoom vis
             }
             else {
@@ -1723,39 +1730,39 @@ namespace Camera_PTZ
                 {
                     case 0:
                         focusIr = 93;
-                        FOV = 5;
+                        camFOV = 5;
                         break;
                     case 1:
                         focusIr = 95;
-                        FOV = 7;
+                        camFOV = 7;
                         break;
                     case 2:
                         focusIr = 96;
-                        FOV = 9; break;
+                        camFOV = 9; break;
                     case 3:
                         focusIr = 97;
-                        FOV = 13; break;
+                        camFOV = 13; break;
                     case 4:
                         focusIr = 98;
-                        FOV = 15; break;
+                        camFOV = 15; break;
                     case 5:
                         focusIr = 98;
-                        FOV = 24; break;
+                        camFOV = 24; break;
                     case 6:
                         focusIr = 99;
-                        FOV = 30; break;
+                        camFOV = 30; break;
                     case 7:
                         focusIr = 99;
-                        FOV = 45; break;
+                        camFOV = 45; break;
                     case 8:
                         focusIr = 100;
-                        FOV = 60; break;
+                        camFOV = 60; break;
                     default:
                         return;
                 }
                 if (isSimulation)
                 {
-                    simFOV = FOV/10.0;
+                    simFOV = camFOV/10.0;
                 }
                 else
                 {
@@ -1764,8 +1771,8 @@ namespace Camera_PTZ
                     cmd[1] = 0x00;
                     cmd[2] = 0x07;
                     cmd[3] = 0x77;
-                    cmd[4] = (byte)((FOV >> 8) | (0xB0));// //Ir camera zoom
-                    cmd[5] = (byte)(FOV);
+                    cmd[4] = (byte)((camFOV >> 8) | (0xB0));// //Ir camera zoom
+                    cmd[5] = (byte)(camFOV);
                     cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
                     tc.Write(cmd);
                 }
@@ -1773,11 +1780,11 @@ namespace Camera_PTZ
                 byte[] dgram;
                 dgram = new byte[3];
                 dgram[0] = 0xfe;
-                dgram[1] = (byte)((6000 / FOV)>>8);
-                dgram[2] = (byte)(6000 / FOV);
+                dgram[1] = (byte)((6000 / camFOV)>>8);
+                dgram[2] = (byte)(6000 / camFOV);
                 listener.Send(dgram, 3, "127.0.0.1", 8000);//send zoom vis
             }
-
+            curFieldOfView = camFOV / 10.0;
             UpdateFocus();
         }
         public void zoomIRIn()//zoom in IR cam
