@@ -632,6 +632,12 @@ namespace Camera_PTZ
             }
             return hex;
         }
+        public double getValue( String valueName)
+        {
+            xmlData.Load(xmlFileName);
+
+            return xmlData.GetValue<double>(valueName,0);
+        }
         public Config()
         {
             

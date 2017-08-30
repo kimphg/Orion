@@ -56,6 +56,26 @@ namespace Camera_PTZ
         double x_sum = 0, y_sum = 0;
         private int errCount =-50;
         bool isSimulation = false;
+        double huongNT, doNT;
+        double x_target = 0, y_target = 0;
+        private bool turboLence = false;
+        private bool teleMul = false;
+        private bool stabilizOn = false;
+        private bool isRecording = false;
+
+        private double curCamFocus;
+        private double simBearing = 0;
+        private double simElevation = 0;
+        private double simBearingRate = 0;
+        private double simElevationRate = 0;
+        private double simFOV = 30;
+        private double curRFvalue;
+        private double curFieldOfView;
+        private double elevationErr;
+        private double aziError;
+        bool queryMode = true;
+        private double trackSensitive, focusRate, targetSize, zoomRate;
+        private double[] focusArray;
         public ControllerNightHawk(TelnetConnection tconnect, GuiMain ptzControl)
         {
             //restartTracker();// restart chuong trinh cua anh Thi
@@ -68,6 +88,31 @@ namespace Camera_PTZ
             // ket noi den camera
             tc = tconnect;
             m_Gui = ptzControl;
+            huongNT         = m_Gui.mConfig.getValue("huongNT");
+            doNT            = m_Gui.mConfig.getValue("doNT");
+            elevationErr    = m_Gui.mConfig.getValue("elevationErr");
+            aziError        = m_Gui.mConfig.getValue("aziError");
+            trackSensitive  = m_Gui.mConfig.getValue("trackSensitive");
+            focusRate       = m_Gui.mConfig.getValue("focusRate");
+            targetSize      = m_Gui.mConfig.getValue("targetSize");
+            zoomRate        = m_Gui.mConfig.getValue("zoomRate");
+            focusArray = new double[16];
+            focusArray[0] = m_Gui.mConfig.getValue("focusArray1");
+            focusArray[1] = m_Gui.mConfig.getValue("focusArray2");
+            focusArray[2] = m_Gui.mConfig.getValue("focusArray3");
+            focusArray[3] = m_Gui.mConfig.getValue("focusArray4");
+            focusArray[4] = m_Gui.mConfig.getValue("focusArray5");
+            focusArray[5] = m_Gui.mConfig.getValue("focusArray6");
+            focusArray[6] = m_Gui.mConfig.getValue("focusArray7");
+            focusArray[7] = m_Gui.mConfig.getValue("focusArray8");
+            focusArray[8] = m_Gui.mConfig.getValue("focusArray9");
+            focusArray[9] = m_Gui.mConfig.getValue("focusArray10");
+            focusArray[10] = m_Gui.mConfig.getValue("focusArray11");
+            focusArray[11] = m_Gui.mConfig.getValue("focusArray12");
+            focusArray[12] = m_Gui.mConfig.getValue("focusArray13");
+            focusArray[13] = m_Gui.mConfig.getValue("focusArray14");
+            focusArray[14] = m_Gui.mConfig.getValue("focusArray15");
+            focusArray[15] = m_Gui.mConfig.getValue("focusArray16");
             //mo socket
             mUpdateTimer = new System.Threading.Timer(TimerCallback, null, 100, 100);
             timer200ms = new System.Threading.Timer(Timer200, null, 500, 500);
@@ -75,7 +120,7 @@ namespace Camera_PTZ
             groupEP = new IPEndPoint(IPAddress.Any, 0);
             initCommand();
         }
-        public ControllerNightHawk(GuiMain ptzControl)
+        public ControllerNightHawk(GuiMain ptzControl)// chay o che do mo phong
         {
             //restartTracker();// restart chuong trinh cua anh Thi
             //ket noi den joystick
@@ -87,6 +132,14 @@ namespace Camera_PTZ
             // ket noi den camera
             isSimulation = true;
             m_Gui = ptzControl;
+            huongNT         = m_Gui.mConfig.getValue("huongNT");
+            doNT            = m_Gui.mConfig.getValue("doNT");
+            elevationErr    = m_Gui.mConfig.getValue("elevationErr");
+            aziError        = m_Gui.mConfig.getValue("aziError");
+            trackSensitive  = m_Gui.mConfig.getValue("trackSensitive");
+            focusRate       = m_Gui.mConfig.getValue("focusRate");
+            targetSize      = m_Gui.mConfig.getValue("targetSize");
+            zoomRate        = m_Gui.mConfig.getValue("zoomRate");
             //mo socket
             mUpdateTimer = new System.Threading.Timer(TimerCallback, null, 100, 100);
             timer200ms = new System.Threading.Timer(Timer200, null, 500, 500);
@@ -129,7 +182,7 @@ namespace Camera_PTZ
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);//azi
         }
-        bool queryMode = true;
+        
         private void Timer200(object state)
         {
 
@@ -190,7 +243,7 @@ namespace Camera_PTZ
                     if(input[pos] != 0xFF)break;
                     if ( input[pos + 2] == 0x09 && input[pos + 3] == 0x77)//curCamAzi
                     {
-                        curCamAzi = ((input[pos + 4] << 8) | input[pos + 5]) * 0.0054931640625 - m_Gui.mConfig.elevationErr;/// 65536.0 * 360.0;
+                        curCamAzi = ((input[pos + 4] << 8) | input[pos + 5]) * 0.0054931640625 - elevationErr;/// 65536.0 * 360.0;
                         if (curCamAzi >= 360) curCamAzi -= 360.0;
                         if (curCamAzi < 0) curCamAzi += 360.0;
                         deltaAzi = bearing - curCamAzi;
@@ -362,7 +415,7 @@ namespace Camera_PTZ
                     {
                         if (m_Gui.ListRadar.Count>0&&m_Gui.ListRadar.Count > m_Gui.selectedTargetIndex)
                         {
-                            this.bearing = m_Gui.ListRadar[(m_Gui.selectedTargetIndex)].azi + m_Gui.mConfig.aziError;
+                            this.bearing = m_Gui.ListRadar[(m_Gui.selectedTargetIndex)].azi + aziError;
                             if (bearing >= 360) bearing -= 360;
                             if (bearing < 0) bearing += 360;
                             this.range = m_Gui.ListRadar[(m_Gui.selectedTargetIndex)].range * 1.852;
@@ -711,7 +764,7 @@ namespace Camera_PTZ
                 fogFilter = true;
             }
         }
-        double sumWeight = 1 / 400.0;
+        
         
         private void resettracking()
         {
@@ -783,20 +836,7 @@ namespace Camera_PTZ
             //tc.Write(cmd);
         
         }
-        double x_target=0, y_target=0;
-        private bool turboLence = false;
-        private bool teleMul = false;
-        private bool stabilizOn = false;
-        private bool isRecording = false;
-   
-        private double curCamFocus;
-        private double simBearing = 0;
-        private double simElevation = 0;
-        private double simBearingRate = 0;
-        private double simElevationRate = 0;
-        private double simFOV = 30;
-        private double curRFvalue;
-        private double curFieldOfView;
+        
         
         
         public void ListenToCommand()
@@ -1053,8 +1093,8 @@ namespace Camera_PTZ
                     realWeight *= 1.3;
                 }
                 //Debug.WriteLine("w="+realWeight.ToString());
-                double panControl = x_target*m_Gui.mConfig.trackSensitive;
-                double tiltControl =  - y_target * m_Gui.mConfig.trackSensitive;
+                double panControl = x_target*trackSensitive;
+                double tiltControl =  - y_target * trackSensitive;
                 pan(panControl);
                 tilt(tiltControl);//!!!
                 //ThreadSafe(() => m_Gui.ViewtData(joystick_x, joystick_y, x_track, onTracking, true));
@@ -1355,7 +1395,7 @@ namespace Camera_PTZ
                 return;
             }
             byte[] cmd = new byte[8];
-            uint rate = (uint)m_Gui.mConfig.focusrate;
+            uint rate = (uint)focusRate;
             if (rate > 127) rate = 127;
             cmd[0] = 0xFF;
             cmd[1] = 0x00;
@@ -1560,7 +1600,7 @@ namespace Camera_PTZ
             }
             byte[] cmd = new byte[8];
             //set azi ----------------------- 
-            uint rate = (uint)m_Gui.mConfig.zoomrate;
+            uint rate = (uint)zoomRate;
             //if (!tinhChinh) rate *= 2;
             if (rate > 127) rate = 127;
             //ushort newazi = getAzi();
@@ -1582,7 +1622,7 @@ namespace Camera_PTZ
             }
             byte[] cmd = new byte[8];
             //set azi ----------------------- 
-            uint a = (uint)m_Gui.mConfig.zoomrate;
+            uint a = (uint)zoomRate;
             //if(!tinhChinh)a*=2;
             uint rate = (uint)(255 - a);
             if (rate < 128) rate = 128;
@@ -1865,7 +1905,7 @@ namespace Camera_PTZ
 
         private int getZoomIR()
         {
-            int FOV = (int)(m_Gui.mConfig.targetSize / range);//60/(range/3)
+            int FOV = (int)(targetSize / range);//60/(range/3)
             if (FOV < 5) FOV = 5;
             if (FOV > 60) FOV = 60;
             if (FOV >= 60) zoomFovIr = 8;
@@ -1881,7 +1921,7 @@ namespace Camera_PTZ
         }
         private int getZoomVis()
         {
-            int FOV = (int)(m_Gui.mConfig.targetSize / range);//60/(range/3)
+            int FOV = (int)(targetSize / range);//60/(range/3)
             if (FOV < 3) FOV = 3;
             if (FOV > 600) FOV = 600;
             if (FOV >= 600) zoomFovIr = 16;
@@ -1906,7 +1946,7 @@ namespace Camera_PTZ
         private ushort getEL()
         {
             double EL = -Math.Atan(deltaH / 1000 / range);
-            EL += m_Gui.mConfig.elevationErr / 360.0 * 6.283185307;
+            EL += elevationErr / 360.0 * 6.283185307;
             //double ELcalib = Math.Cos(Math.Abs(bearing - config.constants[1] / 57.2957795)) * config.constants[2] / 57.2957795;
             //EL += ELcalib;// in radian
             //EL += config.constants[0] / 57.2957795;
