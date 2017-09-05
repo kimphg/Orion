@@ -582,10 +582,29 @@ namespace Camera_PTZ
         {
             if (!isSimulation)
             {
+                bool opened = false;
+                foreach (Process pList in Process.GetProcesses())
+                {
+                    if (pList.MainWindowTitle.Contains("3D Camera"))
+                    {
+                        
+                        opened = true;
+                    }
+                }
+                if (!opened)
+                {
+                    if (File.Exists(@"C:\NHCamera\3D_Camera\start.bat"))
+                        Process.Start(@"C:\NHCamera\3D_Camera\start.bat");
+                    else
+                    {
+                        MessageBox.Show("Không tìm thấy phần mềm mô phỏng 3D.");
+                        return;
+                    }
+                }
                 comandNH = new ControllerNightHawk(this);
                 workerThread = new Thread(comandNH.ListenToCommand);
                 workerThread.Start();
-                //Process.Start(@"C:\NHCamera\SimCam\HQVN.exe");
+                
                 isSimulation = true;
             }
         }
@@ -632,11 +651,11 @@ namespace Camera_PTZ
             }
             return hex;
         }
-        public double getValue( String valueName)
+        public double getValue( String valueName, double defaultVal =0)
         {
             xmlData.Load(xmlFileName);
 
-            return xmlData.GetValue<double>(valueName,0);
+            return xmlData.GetValue<double>(valueName, defaultVal);
         }
         public Config()
         {
