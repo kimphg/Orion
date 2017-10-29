@@ -179,7 +179,7 @@ namespace Camera_PTZ
             }
            
         }
-        void startRangeFinder()
+        void startRangeFinder()///
         {
             if (isSimulation) return;
             //FF 00 0F 77 26 00
@@ -272,6 +272,7 @@ namespace Camera_PTZ
             cmd[5] = 0x00;
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);//azi
+            getRespondValue();
         }
 
 
@@ -347,6 +348,7 @@ namespace Camera_PTZ
             cmd[5] = 0x00;
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
+            getRespondValue();
             
         }
         public void StartRadarTargetTrack()
@@ -899,6 +901,7 @@ namespace Camera_PTZ
             }
             else 
             {
+                process2.StartInfo.FileName = m_Gui.mConfig.trackerFileName;
             }
             if(File.Exists(process2.StartInfo.FileName))
             process2.Start();
