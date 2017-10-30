@@ -42,7 +42,7 @@ namespace Camera_PTZ
         public volatile bool tinhChinh = true;
         // trạng thái mục tiêu radar
         double targetAzi;// goc phuong vi
-        double deltaH = 40;// chenh lech do cao
+        double cameraHeight = 40;// chenh lech do cao
         double range;// cu ly mt
         double curCamAzi;
         double deltaAzi;
@@ -90,16 +90,17 @@ namespace Camera_PTZ
             // ket noi den camera
             tc = tconnect;
             m_Gui = ptzControl;
-            huongNT         = m_Gui.mConfig.getValue("huongNT");
-            doNT            = m_Gui.mConfig.getValue("doNT");
-            elevationErr    = m_Gui.mConfig.getValue("elevationErr");
-            aziError        = m_Gui.mConfig.getValue("aziError");
-            trackSensitive  = m_Gui.mConfig.getValue("trackSensitive");
-            focusRate       = m_Gui.mConfig.getValue("focusRate");
-            targetSize      = m_Gui.mConfig.getValue("targetSize");
-            zoomRate        = m_Gui.mConfig.getValue("zoomRate");
+            huongNT         = m_Gui.mConfig.getValue("huongNT",0);
+            doNT            = m_Gui.mConfig.getValue("doNT",0);
+            elevationErr    = m_Gui.mConfig.getValue("elevationErr",0);
+            aziError        = m_Gui.mConfig.getValue("aziError",0);
+            trackSensitive  = m_Gui.mConfig.getValue("trackSensitive",5);
+            focusRate       = m_Gui.mConfig.getValue("focusRate",100);
+            targetSize      = m_Gui.mConfig.getValue("targetSize",100);
+            zoomRate        = m_Gui.mConfig.getValue("zoomRate",100);
             minEle          = m_Gui.mConfig.getValue("minEle",-20);
             maxEle          = m_Gui.mConfig.getValue("maxEle",30);
+            cameraHeight    = m_Gui.mConfig.getValue("cameraHeight", 40);
             focusArray = new int[17];
             focusArray[0] = Convert.ToInt32(m_Gui.mConfig.getValue("focusArray1"));
             focusArray[1] = Convert.ToInt32(m_Gui.mConfig.getValue("focusArray2"));
@@ -207,7 +208,7 @@ namespace Camera_PTZ
                 if (teleMul) str += "2x Zoom|";
                 if (fogFilter) str += "Lọc mù|";
                 if (turboLence) str += "Tăng nhạy nhiệt|";
-                getRespondValue();
+                
                 str = "Phương vị: " + curCamAzi.ToString("0.##")
                     + " |" + "Góc tà: " + curCamEle.ToString("0.##") + " \r\n|"
                     + "Khoảng cách: " + curRFvalue.ToString()
@@ -215,6 +216,7 @@ namespace Camera_PTZ
                     + " |" + "Trường nhìn: " + curFieldOfView.ToString() + " |"
                     + str;
                 str += queryMode.ToString();
+                getRespondValue();
                 ThreadSafe(() => m_Gui.ViewtData(str));
                 //query status
                 
@@ -266,7 +268,7 @@ namespace Camera_PTZ
         {
             if (isSimulation) return;
             byte[] cmd = new byte[8];
-            cmd[0] = 0;
+            cmd[0] = 0xFF;
             cmd[1] = 0x00;
             cmd[2] = 0x4B;
             cmd[3] = 0x77;
@@ -276,8 +278,6 @@ namespace Camera_PTZ
             tc.Write(cmd);
             
         }
-
-
 
         private void getRespondValue()
         {
@@ -468,7 +468,7 @@ namespace Camera_PTZ
                             this.targetAzi = m_Gui.ListRadar[(m_Gui.selectedTargetIndex)].azi + aziError;
                             if (targetAzi >= 360) targetAzi -= 360;
                             if (targetAzi < 0) targetAzi += 360;
-                            this.range = m_Gui.ListRadar[(m_Gui.selectedTargetIndex)].range * 1.852;
+                            this.range = m_Gui.ListRadar[(m_Gui.selectedTargetIndex)].range * 1852;
                             this.StartRadarTargetTrack();
                         }
                         //ThreadSafe(() => m_Gui.ViewtData(x_track, y_track, (curCamAzi), onTracking, true));
@@ -1015,7 +1015,7 @@ namespace Camera_PTZ
                     {
                         double.TryParse(coor[1], out targetAzi);//degrees
                         //azi = azi / 3.141592654 * 180;
-                        double.TryParse(coor[2], out deltaH);//m
+                        double.TryParse(coor[2], out cameraHeight);//m
                         double.TryParse(coor[3], out range);//km
                         //if(y>0)config.constants[0] = y;
                         //ialpha = (unsigned short)(0xffff*alpha/(2*3.141592654));
@@ -1989,7 +1989,7 @@ namespace Camera_PTZ
         }
         private void sendEle()
         {
-            double EL = -Math.Atan(deltaH / 1000 / range);
+            double EL = -Math.Atan(cameraHeight / 1000 / range);
             double eleErr = elevationErr / 180 * 3.1415926535 + Math.Sin((huongNT - targetAzi)) * doNT;
             EL += eleErr / 360.0 * 6.283185307;
             //double ELcalib = Math.Cos(Math.Abs(bearing - config.constants[1] / 57.2957795)) * config.constants[2] / 57.2957795;
