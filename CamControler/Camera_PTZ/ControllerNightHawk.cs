@@ -54,7 +54,7 @@ namespace Camera_PTZ
         TelnetConnection tc;
         GuiMain m_Gui;
         double x_sum = 0, y_sum = 0;
-        private int errCount =-50;
+        //private int errCount =-50;
         bool isSimulation = false;
         double huongNT, doNT;
         double x_target = 0, y_target = 0;
@@ -73,7 +73,7 @@ namespace Camera_PTZ
         private double curFieldOfView;
         private double elevationErr;
         private double aziError;
-        bool queryMode = true;
+        private int queryMode = 0;
         private double trackSensitive, focusRate, targetSize, zoomRate;
         private int[] focusArray;
         private double minEle;
@@ -120,6 +120,7 @@ namespace Camera_PTZ
             focusArray[16] = Convert.ToInt32(m_Gui.mConfig.getValue("focusArray17"));
             //mo socket
             mUpdateTimer = new System.Threading.Timer(TimerCallback, null, 200, 200);
+            
             timer200ms = new System.Threading.Timer(Timer500, null, 500, 500);
             listener = new UdpClient(8001);
             groupEP = new IPEndPoint(IPAddress.Any, 0);
@@ -170,7 +171,6 @@ namespace Camera_PTZ
                 process2.StartInfo.WorkingDirectory = m_Gui.mConfig.WorkingDir;
                 process2.Start();
 
-                errCount = 0;
             }
             catch (Exception e)
             {
@@ -199,11 +199,7 @@ namespace Camera_PTZ
 
             try// check connection state
             {
-                errCount++;
-                if (errCount > 50) { 
-                    restartTracker();
-                    errCount = 0;
-                }
+                
 
                 String str = "";
                 if (stabilizOn) str += "Tự ổn định|";
@@ -211,16 +207,34 @@ namespace Camera_PTZ
                 if (teleMul) str += "2x Zoom|";
                 if (fogFilter) str += "Lọc mù|";
                 if (turboLence) str += "Tăng nhạy nhiệt|";
-
+                getRespondValue();
                 str = "Phương vị: " + curCamAzi.ToString("0.##")
                     + " |" + "Góc tà: " + curCamEle.ToString("0.##") + " \r\n|"
                     + "Khoảng cách: " + curRFvalue.ToString()
                     + " |" + "Tiêu cự: " + curCamFocus.ToString()
                     + " |" + "Trường nhìn: " + curFieldOfView.ToString() + " |"
                     + str;
+                str += queryMode.ToString();
                 ThreadSafe(() => m_Gui.ViewtData(str));
                 //query status
                 
+                
+                if (isSimulation)
+                {
+                    curCamEle = simElevation;
+                    curCamAzi = simBearing;
+                }
+                else 
+                {
+                    if (queryMode < 4) queryLensValue();
+                    else
+                    {
+                        queryRangeFinder();
+                        queryMode = 0;
+                    }
+                    queryMode+=1;
+                    
+                }
                 if (curCamEle < minEle)
                 {
                     setEle(minEle);
@@ -230,18 +244,6 @@ namespace Camera_PTZ
                 {
                     setEle(maxEle);
                     simElevation = maxEle;
-                }
-                if (isSimulation)
-                {
-                    curCamEle = simElevation;
-                    curCamAzi = simBearing;
-                }
-                else 
-                {
-                    if (queryMode) queryLensValue();
-                    else queryRangeFinder();
-                    queryMode = (!queryMode);
-                    getRespondValue();
                 }
                 //read status values from camera
                 
@@ -271,8 +273,8 @@ namespace Camera_PTZ
             cmd[4] = 0x00;
             cmd[5] = 0x00;
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
-            tc.Write(cmd);//azi
-            getRespondValue();
+            tc.Write(cmd);
+            
         }
 
 
@@ -283,6 +285,10 @@ namespace Camera_PTZ
             {
                 List<byte> input = tc.readBinary();
                 if (input.Count == 0) break;
+                while (input[0] != 0xFF)
+                {
+                    input.RemoveAt(0);
+                }
                 int i = 0;
                 while (true)
                 {
@@ -348,7 +354,7 @@ namespace Camera_PTZ
             cmd[5] = 0x00;
             cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
             tc.Write(cmd);
-            getRespondValue();
+            
             
         }
         public void StartRadarTargetTrack()
@@ -930,7 +936,6 @@ namespace Camera_PTZ
 
                     byte[] receive_byte_array = listener.Receive(ref groupEP);
 
-                    errCount = 0;
 
                     if (receive_byte_array[0] == 0xff && receive_byte_array.Length == 5)//nhan du lieu bam tu anh Thi
                     {
@@ -1141,7 +1146,6 @@ namespace Camera_PTZ
             }
             if (onTracking)
             {
-
                 if (Math.Abs(x_sum) > 10)
                 {
                     x_sum /= 2;
@@ -1176,7 +1180,7 @@ namespace Camera_PTZ
                 if (bt8) focusVisInc();
 
             }
-
+            
             /*
             if (isSimulation)
             {
@@ -2006,7 +2010,7 @@ namespace Camera_PTZ
         private  void setEle(double ele)
         {
             if (isSimulation) return;
-            ele = ele / 180 * 3.1415926535;
+            ele = ele / 180.0 * 3.1415926535;
             double eleErr = elevationErr / 180 * 3.1415926535 + Math.Sin((huongNT - curCamAzi)) * doNT;
             ele += eleErr / 360.0 * 6.283185307;
             //double ELcalib = Math.Cos(Math.Abs(bearing - config.constants[1] / 57.2957795)) * config.constants[2] / 57.2957795;
