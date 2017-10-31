@@ -1989,33 +1989,16 @@ namespace Camera_PTZ
         }
         private void sendEle()
         {
-            double EL = -Math.Atan(cameraHeight / 1000.0 / range);
-            double eleErr = elevationErr + Math.Sin((huongNT - targetAzi) / 180 * 3.1415926535) * doNT;
-            EL += eleErr / 180 * 3.1415926535;
-            //double ELcalib = Math.Cos(Math.Abs(bearing - config.constants[1] / 57.2957795)) * config.constants[2] / 57.2957795;
-            //EL += ELcalib;// in radian
-            //EL += config.constants[0] / 57.2957795;
-            if (EL < 0) EL += 6.283185307;
-            byte[] cmd = new byte[8];
-            short newEl = (short)(0xffff * (EL / (6.283185307)));
-            cmd[0] = 0xFF;
-            cmd[1] = 0x00;
-            cmd[2] = 0x06;
-            cmd[3] = 0x77;
-            cmd[4] = (byte)(newEl >> 8);
-            cmd[5] = (byte)(newEl);
-            cmd[6] = (byte)(cmd[1] + cmd[2] + cmd[3] + cmd[4] + cmd[5]);
-            tc.Write(cmd);
+            double EL = -Math.Atan(cameraHeight / range)/3.1415926535*180.0;
+            setEle(EL);
+            
         }
         private  void setEle(double ele)
         {
             if (isSimulation) return;
             ele = ele / 180.0 * 3.1415926535;
-            double eleErr = elevationErr / 180 * 3.1415926535 + Math.Sin((huongNT - curCamAzi)) * doNT;
-            ele += eleErr / 360.0 * 6.283185307;
-            //double ELcalib = Math.Cos(Math.Abs(bearing - config.constants[1] / 57.2957795)) * config.constants[2] / 57.2957795;
-            //EL += ELcalib;// in radian
-            //EL += config.constants[0] / 57.2957795;
+            double eleErr = elevationErr / 180 * 3.1415926535 + Math.Sin((huongNT - curCamAzi) / 180.0 * 3.1415926535) * doNT / 180.0 * 3.1415926535;
+            ele += eleErr ;
             if (ele < 0) ele += 6.283185307;
             short command = Convert.ToInt16(0xffff * (ele / (6.283185307)));
             byte[] cmd = new byte[8];
