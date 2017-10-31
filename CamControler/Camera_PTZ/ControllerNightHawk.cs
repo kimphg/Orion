@@ -1989,9 +1989,9 @@ namespace Camera_PTZ
         }
         private void sendEle()
         {
-            double EL = -Math.Atan(cameraHeight / 1000 / range);
-            double eleErr = elevationErr / 180 * 3.1415926535 + Math.Sin((huongNT - targetAzi)) * doNT;
-            EL += eleErr / 360.0 * 6.283185307;
+            double EL = -Math.Atan(cameraHeight / 1000.0 / range);
+            double eleErr = elevationErr + Math.Sin((huongNT - targetAzi) / 180 * 3.1415926535) * doNT;
+            EL += eleErr / 180 * 3.1415926535;
             //double ELcalib = Math.Cos(Math.Abs(bearing - config.constants[1] / 57.2957795)) * config.constants[2] / 57.2957795;
             //EL += ELcalib;// in radian
             //EL += config.constants[0] / 57.2957795;
