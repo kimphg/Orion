@@ -937,7 +937,7 @@ namespace Camera_PTZ
                     byte[] receive_byte_array = listener.Receive(ref groupEP);
 
 
-                    if (receive_byte_array[0] == 0xff && receive_byte_array.Length == 5)//nhan du lieu bam tu anh Thi
+                    if (receive_byte_array[0] == 0xff && receive_byte_array.Length >= 5)//nhan du lieu bam tu anh Thi
                     {
 
                         int temp;
@@ -1148,17 +1148,17 @@ namespace Camera_PTZ
             {
                 if (Math.Abs(x_sum) > 10)
                 {
-                    x_sum /= 2;
+                    x_sum /= 1.5;
                     realWeight *= 1.3;
                 }
                 if (Math.Abs(y_sum) > 10)
                 {
-                    y_sum /=2;
+                    y_sum /=1.5;
                     realWeight *= 1.3;
                 }
                 //Debug.WriteLine("w="+realWeight.ToString());
-                double panControl = x_target*trackSensitive;
-                double tiltControl =  - y_target * trackSensitive;
+                double panControl = x_sum * trackSensitive;
+                double tiltControl = -y_sum * trackSensitive;
                 pan(panControl);
                 tilt(tiltControl);//!!!
                 //ThreadSafe(() => m_Gui.ViewtData(joystick_x, joystick_y, x_track, onTracking, true));
