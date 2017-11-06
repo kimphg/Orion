@@ -106,7 +106,8 @@ namespace Camera_PTZ
         private void Receive(IAsyncResult ar)
         {
             try {
-                radarCount = 5;
+                
+                
                 IPEndPoint ip = new IPEndPoint(IPAddress.Any,0);
                 byte[] receive_byte_array = UDPDataSocket.Receive(ref ip);
                 for (int i = 0; i < receive_byte_array.Length; i++)
@@ -118,11 +119,9 @@ namespace Camera_PTZ
                 }
                 string received_data = Encoding.ASCII.GetString(receive_byte_array, 0, receive_byte_array.Length);
                 string[] strList = received_data.Split(',');
-                for (int i = 0; i < strList.Length ; i++)
-                {
-                    addARPA(strList);
-                    //strList.(0);
-                }
+                addARPA(strList);
+                
+                  
             }
             catch
             {
@@ -309,9 +308,11 @@ namespace Camera_PTZ
             if(radarCount==0)
             {
                 label_radar_stat.Text = "Chưa kết nối radar";
+                UDPDataSocket.BeginReceive(Receive, new object());
             }
             else {
                 label_radar_stat.Text = "Đã kết nối radar";
+                
             }
             showTargets();
             
@@ -421,6 +422,7 @@ namespace Camera_PTZ
             {
                 if (strList[i] == "$RATTM")
                 {
+                    radarCount = 5;
                     arpaOBJ newobj;
                     newobj.isManual = false;
                     newobj.life = GetTimeSec();
