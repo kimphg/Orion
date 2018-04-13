@@ -184,18 +184,7 @@ namespace Camera_PTZ
             comandNH.panRight();// _ptz.Move(PTZFacade.MoveDirection.Right, Convert.ToInt32(velocityNumber.Value));
         }
 
-        private void button4_Click(object sender, EventArgs e)
-        {
-            switch (camtype)
-            {
-                case cameraType.pelco:
-                    comandPC.MoveDown();
-                    break;
-
-            }
-            //comandNH.tiltDown();//_ptz.Move(PTZFacade.MoveDirection.Down, Convert.ToInt32(velocityNumber.Value));
-            
-        }
+        
 
         private void button8_Click(object sender, EventArgs e)
         {
